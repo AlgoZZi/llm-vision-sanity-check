@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>四季骑游 · Axolotl Road Club</title>
+<style>
+:root{color-scheme:light;--paper:#fbf7eb;--ink:#20352f;--muted:#52655b;--line:#d9ded0;font-family:system-ui,sans-serif;color:var(--ink);background:#e9eee4}
+*{box-sizing:border-box}body{margin:0;min-width:280px}button{font:inherit;color:inherit;cursor:pointer}button:focus-visible{outline:3px solid #176758;outline-offset:3px}svg{display:block}.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+main{max-width:1400px;margin:auto;padding:0 34px 26px}.top{display:flex;justify-content:space-between;align-items:center;gap:18px;min-height:94px}.brand{display:flex;align-items:center;gap:12px;white-space:nowrap}.brand-mark{display:grid;place-items:center;width:49px;height:49px;background:#203a31;border-radius:8px;color:#ffd09b}.brand-mark svg{width:29px;height:29px}.brand b{display:block;font-size:21px;font-weight:850;line-height:1.2}.brand small,.micro{font-size:11px;font-weight:800;line-height:1.3}.brand small{color:var(--muted)}
+.seasons{display:flex;gap:4px;background:var(--paper);padding:4px;border:1px solid var(--line);border-radius:8px}.seasons button{height:38px;min-width:79px;display:flex;align-items:center;justify-content:center;gap:7px;border:0;border-radius:5px;background:transparent;font-size:14px;font-weight:750;white-space:nowrap}.seasons button:hover{background:#e9eee4}.seasons button[aria-pressed=true]{background:#234139;color:#fff8e9}.seasons svg,.transport svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
+.stage{--sky:#a0dfdb;--sky-end:#f9edc4;--cloud:#ffffed;--hill:#94c785;--field:#b6d582;--verge:#8cb165;--lane:#4e565d;--lane-lo:#3b454b;--shoulder:#f7d098;--mark:#f9e5b7;--fore:#507c50;--accent:#ffd181;--caption:#194339;position:relative;overflow:hidden;isolation:isolate;border:1px solid #263a333d;border-radius:8px;background:var(--sky);height:clamp(478px,56vw,710px)}
+.stage[data-season=summer]{--sky:#f2ac82;--sky-end:#ffe5a2;--cloud:#ffeed2;--hill:#e6a05f;--field:#edb974;--verge:#d68d51;--lane:#6a4e4a;--lane-lo:#553c41;--shoulder:#ffe0a5;--mark:#f6c68d;--fore:#916247;--accent:#ffe0a0;--caption:#533229}
+.stage[data-season=autumn]{--sky:#f0b7ab;--sky-end:#ffe6bd;--cloud:#fff3d8;--hill:#c69077;--field:#e4ae73;--verge:#af755c;--lane:#5a505c;--lane-lo:#473e4b;--shoulder:#f0b982;--mark:#ffd69f;--fore:#875947;--accent:#ffd293;--caption:#533649}
+.stage[data-season=winter]{--sky:#94c3df;--sky-end:#eaf5f5;--cloud:#fff;--hill:#a5cddd;--field:#e3eff3;--verge:#a0c7da;--lane:#608095;--lane-lo:#4b687e;--shoulder:#f0f8fb;--mark:#d7edee;--fore:#779cae;--accent:#e0faf6;--caption:#274863}
+#scene{width:100%;height:100%;position:absolute;inset:0}.scene-title{position:absolute;z-index:1;top:25px;left:33px;pointer-events:none;color:var(--caption)}.chapter{display:inline-flex;align-items:center;gap:8px;background:var(--accent);padding:6px 9px;border:1px solid currentColor;border-radius:4px}.chapter span:first-child{display:inline-block;width:7px;height:7px;background:currentColor;border-radius:50%}h1{font-size:47px;line-height:1.12;margin:8px 0 5px;font-weight:900}p{margin:0}.scene-title p{font-size:12px;font-weight:830}.stamp{position:absolute;top:28px;right:31px;width:66px;height:66px;color:var(--caption);opacity:.8;pointer-events:none;transform:rotate(10deg)}
+.footer{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid #c8d4c7;min-height:66px}.route,.transport,.counter{display:flex;align-items:center;gap:10px}.route{min-width:0}.route span:last-child{font-weight:770;font-size:13px}.route .micro{color:var(--muted)}.route-dot{background:#df796a;width:9px;height:9px;border-radius:50%;box-shadow:0 0 0 3px #df796a2e;flex:none}.transport{gap:7px}.transport button{display:grid;place-items:center;width:37px;height:37px;padding:0;border:1px solid #b9c8ba;background:var(--paper);border-radius:6px}.transport button:hover{background:#fff}.counter{margin-right:7px;gap:6px;white-space:nowrap}.counter span{font-size:12px;font-weight:700;color:var(--muted)}.counter output{min-width:2.4ch;text-align:right;font-size:19px;font-weight:850;font-variant-numeric:tabular-nums}
+@media(max-width:760px){main{padding:0 14px 18px}.top{gap:10px;min-height:0;padding:14px 0;flex-wrap:wrap}.brand-mark{width:42px;height:42px}.brand b{font-size:18px}.seasons{flex:0 1 auto}.seasons button{min-width:58px;height:34px;gap:4px;font-size:13px}.seasons svg{width:15px;height:15px}.stage{height:clamp(410px,92vw,590px)}.scene-title{top:21px;left:20px}h1{font-size:34px}.stamp{width:47px;height:47px;top:23px;right:19px}.footer{min-height:58px}}
+@media(max-width:475px){.seasons{flex:1 0 100%}.seasons button{flex:1;min-width:0}.scene-title{left:15px}h1{font-size:31px}.stamp{right:12px;width:42px;height:42px}.counter{margin-right:2px}.route{gap:7px}.route .micro{display:none}.transport{gap:5px}.footer{gap:5px}}
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="22" r="5"/><circle cx="24" cy="22" r="5"/><path d="M8 22l5-11 5 11H8m5-9h8l3 9m-4-11-1-4h5m-15 4h7"/></svg></span><div><b>四季骑游</b><small>AXOLOTL ROAD CLUB</small></div></div>
+    <nav class="seasons" aria-label="四季菜单">
+      <button type="button" data-season="spring" aria-pressed="true"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 7c-4-5 4-5 0 0 6-2 4 5 0 2 3 6-5 6-2 0-5 2-5-5 0-2m2 4v7m0-2 4-2"/></svg>春日</button>
+      <button type="button" data-season="summer" aria-pressed="false"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.5"/><path d="M10 2v2m0 12v2M2 10h2m12 0h2M4.3 4.3l1.4 1.4m8.6 8.6 1.4 1.4m0-11.4-1.4 1.4m-8.6 8.6-1.4 1.4"/></svg>盛夏</button>
+      <button type="button" data-season="autumn" aria-pressed="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 15C2 8 10 4 17 3c0 8-4 13-10 12M3 17l9-8"/></svg>金秋</button>
+      <button type="button" data-season="winter" aria-pressed="false"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2v16M3 6l14 8M3 14l14-8M8 4l2 2 2-2m-4 12 2-2 2 2M3 8l3-.4L5 5m10 10-1-2.6 3-.4M3 12l3 .4L5 15m10-10-1 2.6 3 .4"/></svg>寒冬</button>
+    </nav>
+  </header>
+  <section id="stage" class="stage" data-season="spring" aria-labelledby="place">
+    <div class="scene-title"><div class="chapter micro"><span></span><span id="chapter">01 / 春日</span></div><h1 id="place">鲜花平原</h1><p id="subtitle">BLOOM VALLEY</p></div>
+    <svg class="stamp" viewBox="0 0 68 68" aria-hidden="true"><circle cx="34" cy="34" r="31" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="2 3"/><circle cx="34" cy="34" r="25" fill="none" stroke="currentColor" stroke-width="1"/><path d="M20 38h28M23 34l7-8 6 6 5-5 7 8M24 43h20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="38" cy="22" r="2.5" fill="currentColor"/></svg>
+    <svg id="scene" viewBox="0 0 1280 680" preserveAspectRatio="xMidYMid slice" role="img" aria-label="像素美西螈骑着黑色二八自行车，坐在四轮机械鹈鹕背上，从右方来障碍前自动腾空。">
+      <defs>
+        <linearGradient id="sky" x2="0" y2="1"><stop stop-color="var(--sky)"/><stop offset="1" stop-color="var(--sky-end)"/></linearGradient>
+        <linearGradient id="road" x2="0" y2="1"><stop stop-color="var(--lane)"/><stop offset="1" stop-color="var(--lane-lo)"/></linearGradient>
+        <linearGradient id="shell" x2=".35" y2="1"><stop stop-color="#bce8d3"/><stop offset=".55" stop-color="#72b9ab"/><stop offset="1" stop-color="#398579"/></linearGradient>
+        <linearGradient id="wingPaint" x2=".7" y2="1"><stop stop-color="#80cfc2"/><stop offset="1" stop-color="#398b86"/></linearGradient>
+        <linearGradient id="bill" x2="0" y2="1"><stop stop-color="#ffdd86"/><stop offset="1" stop-color="#f8a752"/></linearGradient>
+        <path id="cloud" d="M8 30C-4 30-3 13 9 13h10C22-3 49-5 55 11c9-5 22 0 24 9h14c9 0 10 10 1 10z"/>
+        <g id="flower"><path d="M0 0v18m0-5-6-3m6 6 7-5" fill="none" stroke="#52764d" stroke-width="2" stroke-linecap="round"/><path d="M0-5C-7-13-13-2-5 2c-5 7 6 11 8 3 8 2 10-10 2-9C5-10 1-10 0-5z" fill="currentColor"/><circle r="2.5" fill="#ffdc81"/></g>
+        <g id="sprig"><path d="M0 0q-9-14-18-15 9 6 11 15m7 0q-1-15 7-22-3 11-2 22m0 0q8-12 16-11-8 5-10 11" fill="currentColor"/></g>
+        <g id="pine"><path d="M0-100q-15 33-30 48h12q-9 15-21 30h14l-20 21h36v17H9V-1h36L25-22h14Q26-37 18-52h12Q16-68 0-100z" fill="currentColor"/><path d="M0-100q-11 27-22 36l12 1 10-6 13 7 9-1Q9-79 0-100zM-18-52q-9 14-14 19l13 1L0-40l15 8 17-1-14-19-5 3L0-55l-12 6z" fill="#f1fbfa"/></g>
+        <g id="leaf"><path d="M-11 3C-11-5-3-9 10-7 7 3 0 9-7 6l-4 3" fill="currentColor"/><path d="m-8 6 12-9" fill="none" stroke="#91583d" stroke-width="1.2" stroke-linecap="round"/></g>
+        <g id="mechWheel"><circle r="33" fill="#23383a" stroke="#182e32" stroke-width="3"/><circle r="28" fill="#354c4e" stroke="#4e6460" stroke-width="2" stroke-dasharray="5 4"/><circle r="19" fill="#d6e3c4" stroke="#172e32" stroke-width="3"/><path d="M0-15v30m-15-15h30m-10.5-10.5 21 21m0-21-21 21" stroke="#7aa49a" stroke-width="2.5"/><circle r="7" fill="#f1ae61" stroke="#2b4e4b" stroke-width="2.5"/><circle cx="-2" cy="-2" r="1.4" fill="#fff1bc"/></g>
+        <g id="bikeWheel"><circle r="37" fill="#f6f2d3" fill-opacity=".37" stroke="#202b2d" stroke-width="7"/><circle r="33" fill="none" stroke="#f7d48f" stroke-width="1.6"/><path d="M-32 0h64M0-32v64m-23-23 46 46m0-46-46 46M-12-30l24 60m18-42-60 24m18 18 24-60m18 42-60-24" fill="none" stroke="#485653" stroke-width="1.1"/><circle r="5" fill="#e7b56e" stroke="#1f3030" stroke-width="2"/></g>
+        <g id="obs-spring"><ellipse rx="43" ry="7" fill="#263931" opacity=".24"/><path d="M-30-5q-6-13 6-21 1-18 19-18 13-8 27 5 18 3 16 21 7 11-7 14z" fill="#779180" stroke="#3f665a" stroke-width="3"/><path d="M-21-13q13-15 34-12m-14-10 9-2" fill="none" stroke="#aeccb0" stroke-width="3" stroke-linecap="round"/><use href="#sprig" x="-25" y="0" color="#7aa155"/><use href="#flower" transform="translate(29 -21) scale(.8)" color="#ffae8e"/></g>
+        <g id="obs-summer"><ellipse rx="47" ry="7" fill="#442d29" opacity=".24"/><path d="M-41-3q-5-8 2-14l10-10q4-4 10-4h17l6-17q3-7 12-7h11q8 0 11 9l10 31q4 12-7 12z" fill="#d98d59" stroke="#874f43" stroke-width="3"/><path d="M-35-8l14-12H5l13-27h12l10 28H19l-8 12" fill="none" stroke="#f7bf80" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"/></g>
+        <g id="obs-autumn"><ellipse rx="51" ry="7" fill="#392b34" opacity=".24"/><path d="M-48-4q4-14 18-17-1-15 16-16 12-17 29-9 13 2 17 18 15 2 19 24z" fill="#c4684b" stroke="#8a493b" stroke-width="3"/><path d="M-31-12q21-11 12-22m21 20q-1-17 11-26m11 29 13-10" fill="none" stroke="#ed9a57" stroke-width="3" stroke-linecap="round"/><use href="#leaf" x="-16" y="-23" color="#f4ae56"/><use href="#leaf" transform="translate(15 -23) rotate(55)" color="#f7c16d"/></g>
+        <g id="obs-winter"><ellipse rx="48" ry="7" fill="#263e51" opacity=".22"/><path d="M-44-5q-4-7 4-17l12-16q7-7 18-6h7l16-17q6-6 13 0l15 17 6 28q3 11-7 12z" fill="#93cfdf" stroke="#527e9b" stroke-width="3"/><path d="M-41-19l18-16 14 1 20-21 12 1 14 15-16-6-15 16-21 9z" fill="#f0fcfc"/><path d="M-15-7l8-18 16 7 15-20m-2 31 11-9" fill="none" stroke="#6aafc6" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/></g>
+      </defs>
+      <rect x="-250" width="1780" height="570" fill="url(#sky)"/>
+      <circle cx="993" cy="152" r="64" fill="var(--accent)" opacity=".44"/><circle cx="993" cy="152" r="49" fill="var(--accent)"/>
+      <g fill="var(--cloud)" opacity=".83"><use class="cloud-drift" href="#cloud" transform="translate(280 156) scale(1.48)"/><use class="cloud-drift" href="#cloud" transform="translate(548 107) scale(.95)"/><use class="cloud-drift" href="#cloud" transform="translate(812 219) scale(1.32)"/><use class="cloud-drift" href="#cloud" transform="translate(1114 132) scale(1.19)"/><use class="cloud-drift" href="#cloud" transform="translate(58 238) scale(1.1)"/></g>
+      <g id="land-spring">
+        <path d="M-200 381Q-70 343 31 350c148 11 116-109 249-88 112 18 163 137 289 101 130-36 173-117 296-68 67 27 106 56 189 25 120-45 180-21 430 55v151H-200z" fill="#a7cf8e"/>
+        <path d="M-200 405Q22 399 109 361c108-46 179-18 247 17 125 64 227 40 336-19 112-60 222 44 343 32 135-14 218-22 445 77v74H-200z" fill="#84b780"/>
+        <path d="M-200 453Q147 369 400 446c170 53 325-62 539-28 137 23 255 31 542 11v141H-200z" fill="#b9d985"/>
+        <path d="M-170 473Q46 414 232 460m395 12q232-54 417-15m19 11q87 17 175 0" fill="none" stroke="#d4e699" stroke-width="9" stroke-linecap="round"/>
+        <g fill="none" stroke="#406e62" stroke-width="2.5" stroke-linecap="round" opacity=".8"><path d="M710 176q9-8 17 0 8-8 16 0m14 14q6-6 12 0 6-6 13 0m-113 6q6-6 12 0 6-6 12 0"/></g>
+      </g>
+      <g id="land-summer" style="display:none">
+        <path d="M-200 372Q38 325 199 364t369-3q209-93 409-52t504 47v196H-200z" fill="#e8a66e"/>
+        <g stroke-linejoin="round"><path d="m580 416 143-178 140 179z" fill="#c97d59"/><path d="m580 416 143-178 28 179z" fill="#edb77d"/><path d="m725 420 190-231 182 234z" fill="#c87d5e"/><path d="m725 420 190-231 43 234z" fill="#f1c187"/><path d="m925 431 112-137 114 141z" fill="#c78766"/><path d="m925 431 112-137 24 138z" fill="#edb982"/><path d="m813 315 125 1m-156 38 164 1m-185 25 188 1m-302-39 91 1m-117 32 124 1m233-31 58 1" fill="none" stroke="#b67452" stroke-width="3" opacity=".53"/><path d="m872 374 20-22 25 4 4 49h-51z" fill="#a96954"/><path d="m882 375 12-13 14 3 2 40h-26z" fill="#775448"/></g>
+        <path d="M-200 407Q73 311 280 399c210 89 337 44 532 14 246-38 395 12 668 33v112H-200z" fill="#e9a66b"/>
+        <path d="M-200 482Q47 373 317 443t504 5q286-49 658 28v80H-200z" fill="#f3c682"/><path d="M10 461q144-39 268-7m488 20q172-35 359-2" fill="none" stroke="#ffd995" stroke-width="8" stroke-linecap="round"/>
+      </g>
+      <g id="land-autumn" style="display:none">
+        <path d="M-200 441V308h143v48H10v-58h80v-53h80v106h55v-51h80v48h56v-77h53v-48h55v99h53v39h75v-79h97v68h45v-93h60v42h64v-36h92v68h41v-87h65v36h89v-59h52v101h97v-67h79v199z" fill="#ca9e9e"/>
+        <g stroke="#815e68" stroke-width="3" stroke-linejoin="round"><path d="M75 455V333l55-35 57 36v121m11 0V354l60-31 82 32v100m244 0V350l39-32 72 31v106m9 0V329l59-39 63 40v125m10 0V359l74-36 88 39v93m82 0V337l55-35 88 34v119" fill="#dfad92"/><path d="M83 333h96m25 23h128m258-4h99m23-20h107m24 30h145m92-24h138" fill="none" stroke="#94677a" stroke-width="7" stroke-linecap="round"/><path d="M117 359v16m40-16v16m83-1v16m39-16v16m30-16v16m318-20v16m39-16v16m71-30v17m54-17v17m70 12v17m47-17v17m53-17v17m148-43v17m51-17v17" stroke="#f6d399" stroke-width="12" stroke-linecap="round"/><path d="M882 385h57v69h-57z" fill="#8b6f7e"/><path d="M864 388h95l-11-15h-74z" fill="#ba675d"/></g>
+        <g stroke-linecap="round"><path d="M95 459v-72m0 35-19-16m19 11 17-18m317 65v-79m0 43 23-26m-23 16-24-19m630 63v-84m0 41-24-21m24 19 24-22m162 68v-81" fill="none" stroke="#825847" stroke-width="9"/><path d="M63 417c-40-7-39-51-9-60-5-27 37-40 55-17 30-8 54 16 42 38 18 28-13 43-38 35-17 13-36 11-50 4zm318 5c-42-17-27-54 5-59-4-26 34-40 54-15 29-11 53 13 44 35 16 23-9 43-33 39-14 9-42 9-70 0zm605-10c-35-13-31-43-6-55-2-24 32-39 54-21 30-9 61 16 48 43 21 22-11 47-42 32-16 10-39 13-54 1zm194 1c-38-10-41-37-13-52-5-29 34-43 53-24 30-11 55 17 47 39 14 26-12 47-44 35-15 8-29 10-43 2z" fill="#cd754f"/><path d="M56 386q-5-23 20-25m305 39q-9-23 16-27m590 16q-3-24 22-26m160 27q-3-24 19-25" fill="none" stroke="#f2ac61" stroke-width="9"/></g>
+        <path d="M-200 448h1680v104H-200z" fill="#d6ab8c"/><path d="M-200 470h1680m-1680 26h1680" fill="none" stroke="#f7d4a6" stroke-width="4"/><path d="M22 469v27m140-27v27m140-27v27m140-27v27m140-27v27m140-27v27m140-27v27m140-27v27m140-27v27m140-27v27" fill="none" stroke="#ae8273" stroke-width="2"/>
+      </g>
+      <g id="land-winter" style="display:none">
+        <path d="M-200 405-38 262q13-13 25 0l100 83 168-169q18-17 35 0l182 164 70-70q12-13 25 0l67 77 203-215q18-19 36 0l120 143 65-57q14-11 26 0l182 166 115-80 99 112v142H-200z" fill="#91b5d1"/>
+        <path d="m159 272 96-96q18-17 35 0l107 98-67-18-43 17-35-38-32 42-19-20zm572-8 106-132q18-19 36 0l120 143-63-27-48 15-31-49-42 49-50-18zm262 11 65-57q14-11 26 0l89 81-62-14-41-28-40 36z" fill="#effafd"/>
+        <path d="M-200 409Q46 335 252 401c211 69 346-49 541-24 234 31 316 73 687-10v195H-200z" fill="#bcd8e5"/>
+        <path d="M-200 467Q58 383 268 448c214 66 380-38 569-18 205 20 417 21 644-4v132H-200z" fill="#eaf5f6"/>
+        <g color="#6e9eae"><use href="#pine" transform="translate(66 439) scale(.83)"/><use href="#pine" transform="translate(111 449) scale(.53)"/><use href="#pine" transform="translate(190 441) scale(.64)"/><use href="#pine" transform="translate(728 437) scale(.64)"/><use href="#pine" transform="translate(764 450) scale(.46)"/><use href="#pine" transform="translate(1084 444) scale(.96)"/><use href="#pine" transform="translate(1146 435) scale(.71)"/><use href="#pine" transform="translate(1214 455) scale(.55)"/></g>
+        <path d="M31 482q156-41 272-15m476 8q153-21 272 5" fill="none" stroke="#c8e0e8" stroke-width="8" stroke-linecap="round"/>
+      </g>
+      <path d="M-300 502Q-87 487 62 495c155 8 251 13 408 4 227-14 368-7 544-7 154 0 315-14 565 6v182H-300z" fill="var(--verge)"/>
+      <path d="M-300 528Q-63 507 91 517c162 10 308 9 446 0 204-13 360-2 514-5 210-4 292-8 529 13v134c-271-15-434 11-603 9-141-2-302-6-510 3-162 7-323 4-478-8-103-8-189-11-289 3z" fill="url(#road)" stroke="var(--shoulder)" stroke-width="4"/>
+      <path d="M-300 542Q-63 521 91 531c162 10 308 9 446 0 204-13 360-2 514-5 210-4 292-8 529 13M-300 643c100-8 186-5 289 3 155 12 316 15 478 8 208-9 369-5 510-3 169 2 332-24 603-9" fill="none" stroke="var(--mark)" stroke-opacity=".25" stroke-width="2"/>
+      <g id="road-marks" fill="none" stroke="var(--mark)" stroke-width="4" stroke-linecap="round" opacity=".8"></g>
+      <g id="verge-details"></g><g id="ground-fx"></g><g id="obstacles"></g>
+      <ellipse id="shadow" cx="443" cy="626" rx="168" ry="17" fill="#172b2c" opacity=".28"/>
+      <g id="rider" transform="translate(425 616)" stroke-linecap="round" stroke-linejoin="round">
+        <g id="far-wheels" opacity=".93"><g transform="translate(-95 -46) scale(.84)"><g class="rolling"><use href="#mechWheel"/></g></g><g transform="translate(100 -46) scale(.84)"><g class="rolling"><use href="#mechWheel"/></g></g></g>
+        <g id="body">
+          <path d="M-116-109q-33 4-46-27 29 16 61 7l27 22z" fill="#6cad9e" stroke="#2a5552" stroke-width="4"/>
+          <path d="M-109-78h226l-14 33H-90z" fill="#304c4e" stroke="#20373a" stroke-width="5"/><path d="M-86-54H93m-155-9h32m100 0h32" stroke="#6a8880" stroke-width="3"/>
+          <path d="M-131-112q5-33 54-36l63-2 72-19q31-13 44 17l25 51q10 38-34 50L4-42l-73-12q-49-8-62-58z" fill="url(#shell)" stroke="#2a5552" stroke-width="4"/>
+          <path d="M-124-111q28-20 68-16l66 3 55-18q24-8 34 6M-86-67q28 11 52 12l91 1q44-1 60-20" fill="none" stroke="#deefd5" stroke-opacity=".8" stroke-width="3"/>
+          <path d="M-142-113h24v10h-24q-7-4 0-10z" fill="#f18c70" stroke="#2a5552" stroke-width="3"/>
+          <path d="M-68-148v-11h94l18 11z" fill="#394d4a" stroke="#223a3a" stroke-width="3"/><path d="M-58-153h76" stroke="#f4c280" stroke-width="2"/>
+          <path d="M66-120q18-38 24-61c4-20 13-41 36-42 20-1 35 12 36 31l-6 21q-7 22-29 32-12 13-14 48" fill="url(#shell)" stroke="#2a5552" stroke-width="4"/>
+          <path d="M81-124q21-26 28-49m-5-18q5-17 21-19" fill="none" stroke="#eaf6d8" stroke-width="3"/>
+          <path d="M128-186q20-3 32-12 28 4 54 15l39 12q9 3 5 9-5 6-26 5l-60 2q-33 28-47 4-6-13 3-35z" fill="url(#bill)" stroke="#634d3a" stroke-width="4"/>
+          <path d="M130-171q38 6 71 3l56 1m-114-15q27-7 44-1" fill="none" stroke="#a96440" stroke-width="2.4"/><path d="M131-166q7 15 18 16l19-7" fill="none" stroke="#ffe5a0" stroke-width="3"/>
+          <circle cx="129" cy="-198" r="13" fill="#e7f0ca" stroke="#315b57" stroke-width="2.5"/><circle cx="131" cy="-198" r="7" fill="#253d3c"/><circle cx="133" cy="-201" r="2.1" fill="#fff8d7"/>
+          <path d="M111-216q-5-14-16-15" fill="none" stroke="#325b58" stroke-width="3"/><circle cx="94" cy="-232" r="4" fill="#ffbd76" stroke="#325b58" stroke-width="2"/>
+          <g id="wing"><path d="M47-111q-34-27-85-10l-55 16q-12 5-5 15 26 30 77 23 42-3 68-31 4-5 0-13z" fill="url(#wingPaint)" stroke="#2f625d" stroke-width="4"/><path d="M-83-103q33 3 64-13m-54 24q33 3 59-11m-43 19q27 2 44-7" fill="none" stroke="#c2e9d1" stroke-width="3"/><circle cx="36" cy="-104" r="12" fill="#daedcd" stroke="#376760" stroke-width="3"/><circle cx="36" cy="-104" r="5" fill="#df9f55" stroke="#376760" stroke-width="2"/></g>
+          <g fill="#ffd087" stroke="#35635b" stroke-width="2"><circle cx="-92" cy="-67" r="3.5"/><circle cx="63" cy="-72" r="3.5"/><circle cx="110" cy="-101" r="3.5"/></g><path d="M72-110l-7 14h9l-4 12 13-17h-9l5-9z" fill="#fbe5a4"/>
+        </g>
+        <g id="near-wheels"><path d="m-80-74-20 37m173-34 21 34" fill="none" stroke="#274245" stroke-width="12"/><path d="m-80-74-20 37m173-34 21 34" fill="none" stroke="#c3c9a2" stroke-width="4"/><circle cx="-80" cy="-74" r="8" fill="#f5bb6d" stroke="#315653" stroke-width="3"/><circle cx="73" cy="-71" r="8" fill="#f5bb6d" stroke="#315653" stroke-width="3"/><g transform="translate(-96 -31) scale(.91)"><g class="rolling"><use href="#mechWheel"/></g></g><g transform="translate(96 -31) scale(.91)"><g class="rolling"><use href="#mechWheel"/></g></g></g>
+        <g id="bike" transform="translate(0 -187)">
+          <g transform="translate(-59 0)"><g class="pedal-wheel"><use href="#bikeWheel"/></g></g><g transform="translate(70 0)"><g class="pedal-wheel"><use href="#bikeWheel"/></g></g>
+          <path d="M-91-24q31-29 65-1m62 1q33-29 66 1" fill="none" stroke="#273332" stroke-width="4"/><path d="M-98-31h56m-48 0 17 21m17-19 10 18" fill="none" stroke="#273332" stroke-width="3"/>
+          <path d="m-59 0 27-49h77L3-1h-62m27-48L3-1m42-48 25 49M45-49l-1-19q1-8 10-7l11 2m-98 24-5-13" fill="none" stroke="#202b2d" stroke-width="6"/><path d="M-22-46h53M10-4l30-34" stroke="#d3a36b" stroke-width="1.5"/><path d="M-49-64q12-4 27 0l-5 6h-17z" fill="#3b332f" stroke="#202b2d" stroke-width="2"/>
+          <path d="M44-76q0-7 7-8 8 0 9 8z" fill="#ffcd69" stroke="#613f32" stroke-width="2"/><path d="M42-76h20m-7-6 4-4" stroke="#613f32" stroke-width="2"/>
+          <path d="M-60-3H1q7 0 7 6T1 9h-60z" fill="#353e3e" stroke="#202b2d" stroke-width="2"/><circle cx="2" cy="0" r="9" fill="#d5b178" stroke="#25342f" stroke-width="2"/>
+          <g transform="translate(2 0)"><g id="pedal"><path d="M-10-7 10 7m-14-14h-11m20 14h10" fill="none" stroke="#293733" stroke-width="3"/></g></g>
+          <g transform="translate(-24 -85)"><g id="axolotl" shape-rendering="crispEdges"></g></g>
+        </g>
+      </g>
+      <g id="foreground"></g><g id="air-fx"></g>
+    </svg>
+  </section>
+  <footer class="footer">
+    <div class="route"><i class="route-dot" aria-hidden="true"></i><span class="micro">在途</span><span id="status" role="status">春日 · 骑行中</span></div>
+    <div class="transport"><div class="counter"><span id="count-label">越障</span><output id="count" aria-labelledby="count-label" aria-live="off">00</output></div>
+      <button id="play" type="button" title="暂停" aria-label="暂停"><svg viewBox="0 0 20 20" aria-hidden="true"><path id="play-icon" d="M7 4v12m6-12v12"/></svg></button>
+      <button id="restart" type="button" title="重新出发" aria-label="重新出发"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 7a6.5 6.5 0 1 1 0 6m0-10v4h4"/></svg></button>
+    </div>
+  </footer>
+</main>
+<script>
+'use strict';
+const ns='http://www.w3.org/2000/svg';
+const $=id=>document.getElementById(id);
+const svg=(name,attrs={},parent)=>{
+  const node=document.createElementNS(ns,name);
+  for(const [key,value] of Object.entries(attrs)) node.setAttribute(key,value);
+  if(parent) parent.append(node);
+  return node;
+};
+const themes={
+  spring:{number:'01',name:'春日',place:'鲜花平原',title:'BLOOM VALLEY',motif:'flower',colors:['#f58783','#fff1bf','#e8a0a9','#eea553'],air:['#f78b81','#ffffd3']},
+  summer:{number:'02',name:'盛夏',place:'金字塔遗迹',title:'PYRAMID DUNES',motif:'sprig',colors:['#a16847','#c0804d','#9a744b','#e0a369'],air:['#fff5be','#f3cd94']},
+  autumn:{number:'03',name:'金秋',place:'落叶街道',title:'MAPLE AVENUE',motif:'leaf',colors:['#c0574b','#f3b458','#9e624e','#e08553'],air:['#e4764f','#f4bd66']},
+  winter:{number:'04',name:'寒冬',place:'冰封雪山',title:'FROST PEAKS',motif:'sprig',colors:['#f2fcfc','#b5dbe6','#e1f4f6','#85b0c2'],air:['#f7ffff','#d2edf8']}
+};
+const stage=$('stage'), scene=$('scene');
+const motion=window.matchMedia('(prefers-reduced-motion: reduce)');
+const buttons=[...document.querySelectorAll('.seasons button')];
+const wheels=[...scene.querySelectorAll('.rolling')], bikeWheels=[...scene.querySelectorAll('.pedal-wheel')];
+const clouds=[...scene.querySelectorAll('.cloud-drift')].map(el=>({el,base:el.getAttribute('transform')}));
+const rects=[
+  ['#67394e',[[1,5,3,2],[0,8,5,2],[2,11,3,2],[13,5,3,2],[13,8,5,2],[13,11,3,2],[4,5,10,8],[6,12,8,7],[3,14,5,4],[6,17,5,3],[9,18,4,3],[12,20,5,2],[11,14,9,2]]],
+  ['#ec758f',[[1,5,3,1],[0,8,5,1],[2,11,3,1],[13,5,3,1],[14,8,4,1],[13,11,3,1],[3,15,4,2],[6,16,6,3],[11,18,2,2],[13,20,3,1],[13,14,6,1]]],
+  ['#ffafbc',[[4,6,10,6],[5,5,8,8],[7,12,6,5],[7,16,5,1],[12,14,2,1]]],
+  ['#ffe1d2',[[6,6,7,2],[6,8,4,2],[7,13,5,2]]],
+  ['#df657d',[[5,10,2,1],[11,10,2,1],[1,8,2,1],[15,8,2,1]]],
+  ['#382b39',[[6,8,1,2],[11,8,1,2],[8,10,2,1],[9,11,1,1]]],
+  ['#fff9e4',[[6,8,1,1],[11,8,1,1]]],
+  ['#bf555e',[[5,12,8,1],[4,13,3,1],[4,14,1,3]]],
+  ['#f59683',[[6,12,6,1],[5,13,2,1],[4,15,1,1]]]
+];
+const ax=$('axolotl');
+for(const [fill,tiles] of rects) for(const [x,y,w,h] of tiles){
+  svg('rect',{x:x*4-30,y:y*4-77,width:w*4,height:h*4,fill},ax);
+}
+const random=(min,max)=>min+Math.random()*(max-min);
+const mod=(x,n)=>(x%n+n)%n;
+const perRow=(group,length,spacing,make)=>{
+  const host=$(group);
+  return Array.from({length},(_,i)=>({el:make(host,i),x:i*spacing-230}));
+};
+const marks=perRow('road-marks',17,108,(g,i)=>svg('path',{d:`M0 0q27 ${i%2?1:0} 56 0`},g));
+const decor=perRow('verge-details',29,63,(g,i)=>{
+  const el=svg('g',{},g);
+  svg('ellipse',{cx:3,cy:2,rx:13+(i%3)*4,ry:3.1,fill:'var(--fore)',opacity:.18},el);
+  svg('use',{class:'decoration',transform:`rotate(${i%3*12-12}) scale(${.55+i%5*.15})`},el);
+  if(i%3===0) svg('use',{class:'decoration',transform:'translate(19 2) scale(.56)'},el);
+  return el;
+});
+const front=perRow('foreground',18,103,(g,i)=>{
+  const el=svg('g',{},g);
+  svg('use',{class:'decoration',transform:`scale(${.72+(i%4)*.2})`},el);
+  if(i%2===0) svg('use',{class:'decoration',transform:'translate(26 0) scale(.82)'},el);
+  return el;
+});
+const air=Array.from({length:25},(_,i)=>({el:svg('path',{},$('air-fx')),x:random(0,1750),y:random(220,665),speed:random(12,41),phase:random(0,6.3),size:random(1,3)+i%2}));
+const dust=Array.from({length:12},()=>svg('circle',{fill:'var(--mark)'},$('ground-fx')));
+const speed=245, origin=425, base=616, jumpStart=285, jumpTime=2.0;
+let season='spring', running=!motion.matches, elapsed=0, distance=0, cleared=0, nextX=0, obstacles=[], jump=null, previous=null;
+function updateLabels(){
+  const action=running?'暂停':'继续';
+  $('status').textContent=`${themes[season].name} · ${running?'骑行中':'已暂停'}`;
+  $('play').setAttribute('aria-label',action);
+  $('play').title=action;
+  $('play-icon').setAttribute('d',running?'M7 4v12m6-12v12':'M7 4l9 6-9 6z');
+}
+function count(){ $('count').value=String(cleared).padStart(2,'0'); }
+function spawn(x){
+  const el=svg('g',{},$('obstacles'));
+  svg('use',{href:`#obs-${season}`,transform:`scale(${random(.8,1.06).toFixed(3)})`},el);
+  obstacles.push({x,el,triggered:false,counted:false});
+}
+function setSeason(key){
+  season=key;
+  const theme=themes[key];
+  stage.dataset.season=key;
+  $('chapter').textContent=`${theme.number} / ${theme.name}`;
+  $('place').textContent=theme.place;
+  $('subtitle').textContent=theme.title;
+  for(const button of buttons){
+    const active=button.dataset.season===key;
+    button.setAttribute('aria-pressed',String(active));
+    $(`land-${button.dataset.season}`).style.display=active?'':'none';
+  }
+  for(const [i,item] of [...decor,...front].entries()){
+    for(const [j,u] of [...item.el.querySelectorAll('.decoration')].entries()){
+      u.setAttribute('href',`#${theme.motif}`);
+      u.setAttribute('color',theme.colors[(i+j*2)%theme.colors.length]);
+    }
+  }
+  for(const [i,p] of air.entries()){
+    p.el.setAttribute('fill',theme.air[i%2]);
+    p.el.setAttribute('d',key==='autumn'?`M0 0q${p.size*3} ${-p.size*2} ${p.size*4} 0Q${p.size*2} ${p.size*3} 0 0z`:`M${-p.size} 0a${p.size} ${p.size} 0 1 0 ${p.size*2} 0a${p.size} ${p.size} 0 1 0 ${-p.size*2} 0`);
+  }
+  resetRide();
+  updateLabels();
+}
+function resetRide(){
+  elapsed=0;distance=0;cleared=0;jump=null;previous=null;
+  $('obstacles').replaceChildren();obstacles=[];
+  const first=random(890,960);
+  spawn(first);nextX=first+random(700,1040);
+  count();render();
+}
+function advance(dt){
+  elapsed+=dt;
+  distance+=speed*dt;
+  while(nextX-distance<1550){spawn(nextX);nextX+=random(700,1040);}
+  if(jump && elapsed-jump.at>=jumpTime) jump=null;
+  for(const ob of obstacles){
+    const px=ob.x-distance;
+    if(!ob.triggered && !jump && px<=origin+jumpStart){ob.triggered=true;jump={at:elapsed};}
+    if(ob.triggered && !ob.counted && px<origin-156){ob.counted=true;cleared++;count();}
+  }
+  while(obstacles.length && obstacles[0].x-distance<-260) obstacles.shift().el.remove();
+}
+function render(){
+  const time=elapsed;
+  const phase=jump?Math.min((time-jump.at)/jumpTime,1):0;
+  const arc=jump?Math.sin(Math.PI*phase):0;
+  const height=157*Math.pow(arc,1.07);
+  const bob=Math.sin(time*8)*1.4*(1-arc);
+  const pitch=jump?-12*Math.sin(2*Math.PI*phase)*arc:Math.sin(time*4)*.5;
+  $('rider').setAttribute('transform',`translate(${origin} ${base-height+bob}) rotate(${pitch})`);
+  $('shadow').setAttribute('rx',168-arc*41);
+  $('shadow').setAttribute('opacity',.28-arc*.17);
+  $('body').setAttribute('transform',`rotate(${pitch*.27} 0 -56)`);
+  $('wing').setAttribute('transform',`rotate(${-32*arc+Math.sin(time*13)*7*arc} 36 -104)`);
+  $('bike').setAttribute('transform',`translate(0 ${-187-arc*10}) rotate(${pitch*.66+arc*7})`);
+  ax.setAttribute('transform',`translate(${arc*7} ${-arc*12}) rotate(${-arc*13+Math.sin(time*8)*1.5} 1 -16)`);
+  for(const w of wheels) w.setAttribute('transform',`rotate(${distance*2.22%360})`);
+  for(const w of bikeWheels) w.setAttribute('transform',`rotate(${distance*2.02%360})`);
+  $('pedal').setAttribute('transform',`rotate(${(time*165)%360})`);
+  for(const ob of obstacles) ob.el.setAttribute('transform',`translate(${ob.x-distance} 615)`);
+  for(const item of marks) item.el.setAttribute('transform',`translate(${mod(item.x-distance+230,1836)-230} 593)`);
+  for(const [i,item] of decor.entries()) item.el.setAttribute('transform',`translate(${mod(item.x-distance*.83+230,1827)-230} ${488+(i%4)*6})`);
+  for(const [i,item] of front.entries()) item.el.setAttribute('transform',`translate(${mod(item.x-distance*1.12+230,1854)-230} ${674+(i%3)*4})`);
+  for(const {el,base} of clouds) el.setAttribute('transform',`translate(${Math.sin(time*.11)*32} 0) ${base}`);
+  for(const p of air){
+    const x=mod(p.x-time*p.speed,1750)-230;
+    const y=p.y+Math.sin(time*1.1+p.phase)*15;
+    p.el.setAttribute('transform',`translate(${x} ${y}) rotate(${(time*32+p.phase*60)%360})`);
+    p.el.setAttribute('opacity',season==='summer'?.22:season==='spring'?.53:.72);
+  }
+  for(const [i,bit] of dust.entries()){
+    const age=mod(time*2.8+i*.19,1);
+    bit.setAttribute('cx',origin-110-age*(54+i*2));
+    bit.setAttribute('cy',base-7-age*(9+i%3*5));
+    bit.setAttribute('r',1+age*(2.5+i%3));
+    bit.setAttribute('opacity',(1-age)*.42*(1-arc));
+  }
+}
+function frame(now){
+  if(running){
+    if(previous!==null) advance(Math.min((now-previous)/1000,.05));
+    render();previous=now;
+  }else previous=null;
+  requestAnimationFrame(frame);
+}
+function fit(){
+  const aspect=stage.clientWidth/Math.max(1,stage.clientHeight);
+  const width=680*aspect;
+  const left=width<1150?Math.max(0,origin-width*.43):(1280-width)/2;
+  scene.setAttribute('viewBox',`${left} 0 ${width} 680`);
+}
+for(const button of buttons) button.addEventListener('click',()=>{
+  if(season!==button.dataset.season) setSeason(button.dataset.season);
+});
+$('play').addEventListener('click',()=>{running=!running;previous=null;updateLabels();});
+$('restart').addEventListener('click',()=>{resetRide();updateLabels();});
+motion.addEventListener('change',event=>{if(event.matches && running){running=false;updateLabels();}});
+new ResizeObserver(fit).observe(stage);
+setSeason('spring');fit();requestAnimationFrame(frame);
+</script>
+</body>
+</html>

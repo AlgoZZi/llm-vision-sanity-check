@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>溪畔轻拍 · 六秒国风动画</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+  body { display: grid; place-items: center; background: #e7e5d8; }
+  .painting { display: block; width: min(100vw, 177.777778vh); height: auto; aspect-ratio: 16 / 9; background: #f1eddc; }
+  svg { isolation: isolate; }
+  .ink { stroke-linecap: round; stroke-linejoin: round; }
+  .paper { mix-blend-mode: multiply; pointer-events: none; }
+</style>
+</head>
+<body>
+<svg class="painting ink" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-labelledby="title description">
+<title id="title">溪畔轻拍</title>
+<desc id="description">一幅横向国风浅滩动画。河狸坐在左岸石块上，每六秒抬尾并轻拍水面一次。三圈涟漪从尾尖接触点展开，绿色浮萍随青蓝溪水从左向右漂流，岸边卵石保持不动。固定镜头，自动无缝循环。</desc>
+<defs>
+  <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#f1eddd"/><stop offset="1" stop-color="#e3e9db"/></linearGradient>
+  <linearGradient id="water" x1="0" y1="0" x2=".2" y2="1"><stop stop-color="#93bdb4"/><stop offset=".45" stop-color="#70aaa6"/><stop offset="1" stop-color="#498b93"/></linearGradient>
+  <linearGradient id="sand" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#e3d3a9"/><stop offset="1" stop-color="#c8b88e"/></linearGradient>
+  <linearGradient id="stone" x1="0" y1="0" x2=".4" y2="1"><stop stop-color="#a8b3a4"/><stop offset="1" stop-color="#728c84"/></linearGradient>
+  <linearGradient id="fur" x1="0" y1="0" x2="1" y2=".8"><stop stop-color="#ae7950"/><stop offset="1" stop-color="#875b3f"/></linearGradient>
+  <linearGradient id="tailColor" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#77563f"/><stop offset="1" stop-color="#594839"/></linearGradient>
+  <pattern id="tailWeave" width="19" height="19" patternUnits="userSpaceOnUse" patternTransform="rotate(-12)"><path d="M-5 5L14 24M5-5L24 14M-5 14L14-5M5 24L24 5" fill="none" stroke="#b18b62" stroke-width="1.35" opacity=".38"/></pattern>
+  <filter id="paperGrain" x="0" y="0" width="100%" height="100%"><feTurbulence type="fractalNoise" baseFrequency=".72" numOctaves="3" seed="16" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>
+  <filter id="soft"><feGaussianBlur stdDeviation="12"/></filter>
+  <clipPath id="riverClip"><path d="M0 370C263 343 409 397 638 408C976 398 1260 329 1600 356V900H0Z"/></clipPath>
+  <clipPath id="tailClip"><path d="M0 0C38-10 71 0 114 19C170 38 224 52 237 82C249 110 219 121 184 112C147 103 110 78 72 57L21 26C5 18-3 10 0 0Z"/></clipPath>
+  <g id="pebble"><path d="M-21 7Q-25-5-8-12Q10-21 24-4Q32 10 13 13L-10 13Z" fill="#8b9b8d"/><path d="M-18 0Q0-15 18-4" fill="none" stroke="#d1d3b6" stroke-width="3" opacity=".7"/></g>
+  <g id="duckweed">
+    <ellipse cx="0" cy="6" rx="37" ry="9" fill="#326f70" opacity=".16"/>
+    <path d="M-3 0C-26-20-46-5-31 6C-21 12-7 9-3 0Z" fill="#9eae62" stroke="#4c7857" stroke-width="1.5"/>
+    <path d="M-3 0L-28 1" stroke="#d3d29a" stroke-width="1.1"/>
+    <path d="M-2 1C-4-25 25-25 26-10C27 0 9 7-2 1Z" fill="#adc176" stroke="#4c7857" stroke-width="1.5"/>
+    <path d="M1 0L17-13" stroke="#e0dca7" stroke-width="1.2"/>
+    <path d="M8 8C24-3 42 4 31 14C23 21 12 16 8 8Z" fill="#7e9d59" stroke="#4c7857" stroke-width="1.2"/>
+    <path d="M-16 14Q-3 19 6 15" fill="none" stroke="#c0d6bd" stroke-width="1.4" opacity=".65"/>
+  </g>
+  <g id="reed">
+    <path d="M0 0Q-8-43-5-90M2 0Q13-42 27-65M-3 0Q-20-30-35-46M5 0Q32-20 43-22" fill="none" stroke="#697c51" stroke-width="3"/>
+    <path d="M-5-35Q-32-73-22-76Q-5-66-5-35M10-25Q8-58 22-72Q25-47 10-25M-10-13Q-37-43-46-39Q-39-20-10-13M18-12Q38-38 48-35Q45-19 18-12" fill="#819361"/>
+    <path d="M-5-75L-6-103" stroke="#786c49" stroke-width="6"/>
+    <path d="M-6-103L-7-111" stroke="#786c49" stroke-width="1"/>
+  </g>
+</defs>
+<!-- Pale paper, distant layered hills, and a quiet fixed horizon. -->
+<path d="M0 0H1600V900H0Z" fill="url(#sky)"/>
+<circle cx="1255" cy="153" r="49" fill="#d8b875" opacity=".36"/>
+<path d="M534 294Q663 212 740 241Q824 156 914 211Q983 143 1083 225Q1192 170 1296 236Q1432 156 1600 247V400H534Z" fill="#bacbbd" opacity=".43"/>
+<path d="M702 320Q807 253 896 272Q1010 208 1114 267Q1247 206 1364 282Q1478 233 1600 278V408H702Z" fill="#9cb9ac" opacity=".4"/>
+<path d="M0 304Q107 284 195 304Q337 285 447 316Q565 300 711 330Q947 350 1101 312Q1334 273 1600 319V408H0Z" fill="#91afa0" opacity=".45"/>
+<path d="M0 348Q246 317 418 356Q671 396 965 360Q1330 309 1600 343" fill="none" stroke="#e2e7d1" stroke-width="14" opacity=".7"/>
+<g fill="none" stroke="#749483" stroke-width="2" opacity=".4"><path d="M1100 319l-3-30m3 25l9-14m-10 5l-9-11M1123 316l3-25m-2 16l10-13M1475 323l-3-34m2 23l12-17M1496 327l8-29"/></g>
+<g fill="#59766c" opacity=".63"><path d="M1029 189q11-11 23 1q12-11 23-1q-12-4-23 6q-12-10-23-6"/><path d="M1090 171q8-7 15 1q8-8 16-1q-8-2-16 5q-7-7-15-5"/></g>
+<!-- The water occupies the open right side and the foreground. -->
+<path d="M0 370C263 343 409 397 638 408C976 398 1260 329 1600 356V900H0Z" fill="url(#water)"/>
+<g clip-path="url(#riverClip)">
+  <path d="M700 444Q1110 362 1575 406M927 483Q1226 423 1661 459M367 725Q775 659 1237 692M-107 877Q513 779 1044 833" fill="none" stroke="#c0d0b2" stroke-width="25" opacity=".12"/>
+  <g id="currents" fill="none" stroke="#d5e4d2" stroke-width="1.7" opacity=".48"></g>
+  <g fill="#385e58" opacity=".13"><ellipse cx="325" cy="718" rx="36" ry="12"/><ellipse cx="1397" cy="790" rx="49" ry="14"/><ellipse cx="1191" cy="532" rx="19" ry="7"/><ellipse cx="1034" cy="840" rx="29" ry="9"/></g>
+  <g id="floatingPlants"></g>
+  <g id="ripples" fill="none"></g>
+</g>
+<!-- Warm sand and the motionless shoreline are visual reference points. -->
+<path d="M0 353C183 330 306 350 429 404C493 433 619 459 666 506C728 569 587 588 463 624C267 680 258 746 0 799Z" fill="url(#sand)"/>
+<path d="M0 370C183 347 306 367 420 419C493 452 608 471 651 514C694 556 566 581 456 610C250 666 248 733 0 780" fill="none" stroke="#f1e2b7" stroke-width="10" opacity=".75"/>
+<path d="M461 627C318 665 269 725 148 756M630 581Q576 598 540 606" fill="none" stroke="#c2d6bc" stroke-width="3" opacity=".7"/>
+<g id="sandSpecks" fill="#988d69" opacity=".38"></g>
+<g opacity=".65" fill="none" stroke="#a1936a" stroke-width="1.5"><path d="M84 536l19-2m-5 9l8 0M274 424l15 3m14 9l8-1M212 637l13-3M357 579l12 1M443 465l13 3M124 700l14-4"/></g>
+<g>
+  <use href="#pebble" transform="translate(300 588) rotate(-12) scale(1.2)"/>
+  <use href="#pebble" transform="translate(339 613) rotate(15) scale(.65)"/>
+  <use href="#pebble" transform="translate(249 682) rotate(9) scale(.84)"/>
+  <use href="#pebble" transform="translate(218 702) scale(.43)"/>
+  <use href="#pebble" transform="translate(142 740) rotate(-14) scale(.64)"/>
+  <use href="#pebble" transform="translate(665 541) rotate(22) scale(.62)"/>
+  <use href="#pebble" transform="translate(690 560) scale(.3)"/>
+  <use href="#pebble" transform="translate(381 421) rotate(12) scale(.48)"/>
+</g>
+<g id="backReeds"><g transform="translate(135 418) scale(1.1)"><g class="reedMotion"><use href="#reed"/></g></g><g transform="translate(184 427) scale(.7)"><g class="reedMotion"><use href="#reed"/></g></g><g transform="translate(361 451) scale(.64)"><g class="reedMotion"><use href="#reed"/></g></g></g>
+<!-- Broad sitting stone, painted as a few simple mineral planes. -->
+<ellipse cx="491" cy="550" rx="144" ry="28" fill="#3c706b" opacity=".2"/>
+<path d="M359 518L384 480Q427 450 478 461L540 450L598 481L628 524L605 558Q477 577 369 550Z" fill="url(#stone)" stroke="#658278" stroke-width="2"/>
+<path d="M359 518L384 480L444 470L496 481L540 450L598 481L610 504L542 500L482 519L420 510Z" fill="#bdc1a8"/>
+<path d="M359 518L420 510L482 519L466 558L369 550Z" fill="#95a697"/>
+<path d="M482 519L542 500L610 504L628 524L605 558L466 558Z" fill="#7e968a"/>
+<path d="M385 484L440 477M548 461L587 482M394 540L434 546M543 541L583 534" fill="none" stroke="#d7d6b9" stroke-width="3" opacity=".65"/>
+<path d="M439 515L452 530L446 544M551 502L559 515L579 519" fill="none" stroke="#637e74" stroke-width="2" opacity=".6"/>
+<g fill="#74885b"><ellipse cx="389" cy="490" rx="21" ry="6" transform="rotate(-16 389 490)"/><ellipse cx="401" cy="482" rx="13" ry="5"/><ellipse cx="590" cy="545" rx="18" ry="5"/></g>
+<!-- The entire broad, crosshatched tail rotates about one fixed root. -->
+<g id="tail" transform="translate(570 482) rotate(-9)">
+  <path d="M0 0C38-10 71 0 114 19C170 38 224 52 237 82C249 110 219 121 184 112C147 103 110 78 72 57L21 26C5 18-3 10 0 0Z" fill="url(#tailColor)" stroke="#584534" stroke-width="3"/>
+  <g clip-path="url(#tailClip)"><path d="M30-15H255V135H30Z" fill="url(#tailWeave)"/><path d="M62 13Q170 46 227 79" fill="none" stroke="#c19b6a" stroke-width="3" opacity=".38"/></g>
+</g>
+<!-- A rounded beaver, with small ears, blunt muzzle, incisors and webbed feet. -->
+<g id="beaver">
+  <ellipse cx="508" cy="501" rx="72" ry="14" fill="#4e4d3b" opacity=".22"/>
+  <path d="M469 355C439 372 425 418 434 461C437 488 461 508 501 508C547 511 578 495 582 464C586 435 569 408 565 384Z" fill="url(#fur)" stroke="#705139" stroke-width="3"/>
+  <path d="M503 386C480 400 472 433 482 463C488 482 514 491 538 482C562 471 561 442 550 419Z" fill="#c39866"/>
+  <path d="M451 408Q439 440 452 466" fill="none" stroke="#c19360" stroke-width="5" opacity=".7"/>
+  <path d="M466 490C448 486 431 493 430 504C442 515 475 515 490 504L488 495" fill="#73523b" stroke="#654b36" stroke-width="2.4"/>
+  <path d="M536 487C551 482 578 491 583 504C576 516 539 516 524 505Z" fill="#75533b" stroke="#654b36" stroke-width="2.4"/>
+  <path d="M444 502l10-5m3 8l10-6M551 502l2 7m9-9l3 8" fill="none" stroke="#bd9667" stroke-width="1.7"/>
+  <path d="M480 321C476 303 485 292 497 297C507 300 511 313 506 325" fill="#a77950" stroke="#705139" stroke-width="3"/>
+  <path d="M488 316Q483 301 496 305Q503 309 500 319" fill="#6f5039"/>
+  <path d="M545 316C548 299 562 298 568 309C573 320 563 330 556 330" fill="#8b603f" stroke="#705139" stroke-width="2.5"/>
+  <path d="M466 343C468 317 492 308 521 312C550 313 567 329 575 349C579 360 594 365 601 375C610 389 600 405 584 410C566 419 544 410 528 405C504 407 479 395 469 377C463 366 462 355 466 343Z" fill="url(#fur)" stroke="#705139" stroke-width="3"/>
+  <path d="M473 340Q485 321 512 323" fill="none" stroke="#c79965" stroke-width="4"/>
+  <path d="M548 369C561 357 582 363 592 373C610 382 603 398 585 402C570 407 549 400 545 389Z" fill="#d5b280"/>
+  <ellipse cx="591" cy="374" rx="11" ry="8" transform="rotate(14 591 374)" fill="#423e31"/>
+  <path d="M588 370l5 1" stroke="#d8c59c" stroke-width="2"/>
+  <g id="eye"><ellipse cx="552" cy="348" rx="5.7" ry="7" fill="#343c32"/><circle cx="553.5" cy="345.5" r="1.8" fill="#fff5d4"/></g>
+  <path d="M541 334Q547 330 554 334" fill="none" stroke="#6e5139" stroke-width="2.5"/>
+  <path d="M572 394L573 411Q580 414 586 410L586 397" fill="#f0e7c9" stroke="#806748" stroke-width="1.5"/>
+  <path d="M579 398v13" stroke="#b6a480" stroke-width="1.1"/>
+  <path d="M565 389Q575 399 589 392" fill="none" stroke="#72563b" stroke-width="2"/>
+  <g fill="none" stroke="#65553d" stroke-width="1.4" opacity=".8"><path d="M563 380l-27-6M562 386l-29 3M593 385l22-5M595 390l21 4"/></g>
+  <path d="M468 414C470 431 484 443 505 444L518 432C497 428 492 417 489 410" fill="#a3754d" stroke="#765439" stroke-width="2.5"/>
+  <path d="M504 431Q517 424 524 432Q530 443 515 447L503 443" fill="#78583f"/>
+  <path d="M511 433l2 6m4-7l2 6" stroke="#d1a879" stroke-width="1.5"/>
+  <path d="M542 418Q538 434 525 439" fill="none" stroke="#88603f" stroke-width="11"/>
+  <path d="M457 379l6 6m-11 7l6 6M459 461l6 6m0-76l6 5" fill="none" stroke="#765238" stroke-width="2" opacity=".55"/>
+</g>
+<g id="splash" fill="none" stroke="#e2edcf" stroke-width="2.5" opacity="0"></g>
+<!-- Foreground banks and submerged stones remain still. -->
+<g opacity=".65"><path d="M0 866Q44 846 82 861Q110 878 136 900H0Z" fill="#9cac88"/><path d="M1438 900Q1490 867 1546 874L1600 860V900Z" fill="#718f76"/></g>
+<g transform="translate(42 892) scale(1.15)"><g class="reedMotion"><use href="#reed"/></g></g>
+<g transform="translate(1550 906) scale(1.05)"><g class="reedMotion"><use href="#reed"/></g></g>
+<g transform="translate(1510 912) scale(.67)"><g class="reedMotion"><use href="#reed"/></g></g>
+<!-- Restrained traditional inscription; all lettering uses local system fonts. -->
+<g fill="#4b6659" font-family="KaiTi, STKaiti, 'Noto Serif CJK SC', serif">
+  <text x="112" y="151" font-size="46" letter-spacing="9">溪畔轻拍</text>
+  <text x="116" y="188" font-size="14" letter-spacing="5" opacity=".75">水缓缓 · 日悠悠</text>
+</g>
+<g transform="translate(365 115)"><rect width="29" height="34" rx="2" fill="#ae6850" opacity=".83"/><path d="M5 5h19v24H5Z" fill="none" stroke="#efdfbd" stroke-width=".8"/><text x="14.5" y="23" text-anchor="middle" font-family="KaiTi, STKaiti, serif" font-size="19" fill="#f3e4c8">闲</text></g>
+<path d="M110 218H266" stroke="#7a8d70" stroke-width="1" opacity=".35"/>
+<rect class="paper" width="1600" height="900" filter="url(#paperGrain)" opacity=".055"/>
+</svg>
+<script>
+(() => {
+  'use strict';
+  const NS = 'http://www.w3.org/2000/svg';
+  const CYCLE = 6;
+  const TAU = Math.PI * 2;
+  const make = (name, attrs, parent) => {
+    const node = document.createElementNS(NS, name);
+    for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
+    if (parent) parent.appendChild(node);
+    return node;
+  };
+  // Seeded decoration stays perfectly fixed between frames and loop boundaries.
+  let seed = 2718;
+  const random = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  const sand = document.getElementById('sandSpecks');
+  for (let i = 0; i < 94; i++) {
+    const x = 26 + random() * 330, y = 390 + random() * 355;
+    if (x < 370 - (y - 390) * .62) make('ellipse', { cx:x, cy:y, rx:.6 + random() * 1.5, ry:.45 + random() * .5 }, sand);
+  }
+  const currents = [];
+  const currentLayer = document.getElementById('currents');
+  for (let i = 0; i < 34; i++) {
+    const x = random() * 1800 - 100, y = 398 + random() * 470;
+    const length = 25 + random() * 85;
+    const node = make('path', { d:`M0 0q${length / 2} -4 ${length} -1`, 'stroke-width':i % 4 === 0 ? 2.5 : 1.4 }, currentLayer);
+    currents.push({ node, x, y, phase:random() * TAU, opacity:.22 + random() * .5 });
+  }
+  const plants = [];
+  const plantLayer = document.getElementById('floatingPlants');
+  // Wrapping takes place outside the visible frame, never across open water.
+  const plantSpecs = [
+    {x:14,y:752,s:.72,p:.2}, {x:410,y:806,s:.83,p:1.5},
+    {x:845,y:716,s:.91,p:3.1}, {x:1210,y:775,s:.63,p:4.2},
+    {x:1490,y:681,s:.76,p:2.2}, {x:950,y:462,s:.49,p:5.1},
+    {x:1420,y:521,s:.57,p:.8}
+  ];
+  plantSpecs.forEach(spec => {
+    const node = make('g', {}, plantLayer);
+    make('use', { href:'#duckweed' }, node);
+    plants.push({ ...spec, node });
+  });
+  const rings = [];
+  const rippleLayer = document.getElementById('ripples');
+  for (let i = 0; i < 3; i++) {
+    const group = make('g', { opacity:0 }, rippleLayer);
+    const dark = make('ellipse', { fill:'none', stroke:'#3c7c7c', 'stroke-width':1.5 }, group);
+    const light = make('ellipse', { fill:'none', stroke:'#dfebcc', 'stroke-width':2.1 }, group);
+    rings.push({ group, dark, light, delay:i * .19 });
+  }
+  const splash = document.getElementById('splash');
+  const drops = Array.from({length:5}, () => make('path', {}, splash));
+  const tail = document.getElementById('tail');
+  const beaver = document.getElementById('beaver');
+  const eye = document.getElementById('eye');
+  const reeds = Array.from(document.querySelectorAll('.reedMotion'));
+  const smooth = n => n * n * (3 - 2 * n);
+  const clamp = n => Math.max(0, Math.min(1, n));
+  const keys = [[0,-9],[1.15,-9],[1.77,-24],[2.10,0],[2.36,-5],[2.85,-9],[6,-9]];
+  function tailAngle(t) {
+    for (let i = 1; i < keys.length; i++) {
+      if (t <= keys[i][0]) {
+        const [a, x] = keys[i-1], [b, y] = keys[i];
+        const u = clamp((t-a)/(b-a));
+        // A decisive but gentle downstroke, followed by a slower recovery.
+        const ease = i === 3 ? u*u : smooth(u);
+        return x + (y-x)*ease;
+      }
+    }
+    return -9;
+  }
+  function render(t) {
+    const phase = t / CYCLE * TAU;
+    tail.setAttribute('transform', `translate(570 482) rotate(${tailAngle(t)})`);
+    beaver.setAttribute('transform', `translate(0 ${Math.sin(phase)*.85})`);
+    const blink = t > 4.65 && t < 4.91 ? 1 - .92 * Math.sin((t-4.65)/.26*Math.PI) : 1;
+    eye.setAttribute('transform', `translate(0 ${348*(1-blink)}) scale(1 ${blink})`);
+    currents.forEach(item => {
+      const x = ((item.x + 1920*t/CYCLE + 160) % 1920) - 160;
+      const edge = clamp((x+100)/90) * clamp((1700-x)/90);
+      item.node.setAttribute('transform', `translate(${x} ${item.y + Math.sin(phase+item.phase)*1.7})`);
+      item.node.setAttribute('opacity', edge*item.opacity);
+    });
+    plants.forEach(plant => {
+      // Exactly one full hidden-to-hidden traversal in six seconds.
+      const x = ((plant.x + 1800*t/CYCLE + 100) % 1800)-100;
+      const y = plant.y + Math.sin(phase+plant.p)*3;
+      const angle = Math.sin(phase+plant.p)*4;
+      const edge = clamp((x+45)/75)*clamp((1645-x)/75);
+      plant.node.setAttribute('opacity', edge);
+      plant.node.setAttribute('transform', `translate(${x} ${y}) rotate(${angle}) scale(${plant.s})`);
+    });
+    // A single impact at 2.10 s produces three concentric wave crests.
+    rings.forEach(ring => {
+      const age = t-2.10-ring.delay;
+      const life = 3.37-ring.delay;
+      if (age < 0 || age > life) { ring.group.setAttribute('opacity', 0); return; }
+      const u = age/life;
+      const radius = 13+261*(1-Math.pow(1-u,1.2));
+      const alpha = clamp(age/.12)*Math.pow(1-u,1.3)*.83;
+      ring.group.setAttribute('opacity', alpha);
+      for (const [node, offset] of [[ring.dark,2.5],[ring.light,0]]) {
+        node.setAttribute('cx', 789+age*10);
+        node.setAttribute('cy', 594+offset);
+        node.setAttribute('rx', radius);
+        node.setAttribute('ry', radius*.285);
+      }
+    });
+    const splashAge = t-2.10;
+    if (splashAge >= 0 && splashAge < .52) {
+      const u = splashAge/.52;
+      splash.setAttribute('opacity', Math.sin(Math.PI*u)*.85);
+      drops.forEach((drop,i) => {
+        const dx = (i-2)*13*u;
+        const x = 789+dx;
+        const y = 591-Math.sin(Math.PI*u)*(17+((i*7)%18));
+        drop.setAttribute('d', `M${x} ${y}l${(i-2)*.8} ${-3.5*(1-u)}`);
+      });
+    } else splash.setAttribute('opacity',0);
+    reeds.forEach((node,i) => node.setAttribute('transform', `rotate(${Math.sin(phase+i*.8)*1.7})`));
+  }
+  // All movement is evaluated from one 6000 ms clock. No accumulating state,
+  // timers, external assets, or network access are needed for repeated playback.
+  const start = performance.now();
+  render(0);
+  function frame(now) {
+    render(((now-start)%6000)/1000);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
