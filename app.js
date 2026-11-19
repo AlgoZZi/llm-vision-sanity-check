@@ -170,6 +170,11 @@ const elements = {
 };
 
 const buttons = new Map();
+const modelGroups = new Map();
+const providers = [
+  { name: "Anthropic", models: ["Claude Sonnet 5.5", "Claude Opus 5.5"] },
+  { name: "OpenAI", models: ["GPT-6.1 Sol", "GPT-6.2 Sol"] },
+];
 let currentWorkId = null;
 
 function isSvg(work) {
@@ -186,56 +191,87 @@ function createIcon(name) {
   return icon;
 }
 
+function createGroup(name, count, className) {
+  const group = document.createElement("details");
+  const heading = document.createElement("summary");
+  const label = document.createElement("span");
+  const badge = document.createElement("span");
+
+  group.className = `${className}-group`;
+  heading.className = `${className}-heading`;
+  label.textContent = name;
+  badge.className = "model-count";
+  badge.textContent = count;
+  badge.setAttribute("aria-label", `${count} 个作品`);
+  heading.append(label, badge);
+  group.append(heading);
+  return group;
+}
+
 function createNavigation() {
-  const models = [...new Set(works.map((work) => work.model))];
+  document.querySelector(".library-count").textContent = `${works.length} 个作品`;
 
-  for (const [index, model] of models.entries()) {
-    const modelWorks = works.filter((work) => work.model === model);
-    const group = document.createElement("section");
-    const heading = document.createElement("h2");
-    const count = document.createElement("span");
-    const list = document.createElement("ul");
+  for (const provider of providers) {
+    const providerWorks = works.filter((work) => provider.models.includes(work.model));
+    const providerGroup = createGroup(provider.name, providerWorks.length, "provider");
+    const models = document.createElement("div");
+    models.className = "provider-models";
 
-    group.className = "model-group";
-    heading.className = "model-heading";
-    heading.id = `model-${index}`;
-    heading.textContent = model;
-    group.setAttribute("aria-labelledby", heading.id);
-    count.className = "model-count";
-    count.textContent = modelWorks.length;
-    count.setAttribute("aria-label", `${modelWorks.length} 个作品`);
-    heading.append(count);
-    list.className = "model-works";
+    for (const model of provider.models) {
+      const modelWorks = providerWorks.filter((work) => work.model === model);
+      const group = createGroup(model, modelWorks.length, "model");
+      const list = document.createElement("ul");
+      list.className = "model-works";
+      modelGroups.set(model, { provider: providerGroup, model: group });
 
-    for (const work of modelWorks) {
-      const item = document.createElement("li");
-      const button = document.createElement("button");
-      const name = document.createElement("span");
+      for (const work of modelWorks) {
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        const name = document.createElement("span");
 
-      button.type = "button";
-      button.className = "work-button";
-      button.dataset.workId = work.id;
-      button.title = `${work.title} · ${work.file}`;
-      button.setAttribute("aria-controls", "preview-content");
-      name.className = "work-name";
-      name.textContent = work.title;
-      button.append(createIcon(isSvg(work) ? "picture" : "html"), name);
-      button.addEventListener("click", () => {
-        window.location.hash = work.id;
-      });
-      buttons.set(work.id, button);
-      item.append(button);
-      list.append(item);
+        button.type = "button";
+        button.className = "work-button";
+        button.dataset.workId = work.id;
+        button.title = work.title;
+        button.setAttribute("aria-controls", "preview-content");
+        name.className = "work-name";
+        name.textContent = work.title;
+        button.append(createIcon(isSvg(work) ? "picture" : "html"), name);
+        button.addEventListener("click", () => {
+          window.location.hash = work.id;
+        });
+        buttons.set(work.id, button);
+        item.append(button);
+        list.append(item);
+      }
+
+      group.append(list);
+      models.append(group);
     }
 
-    group.append(heading, list);
-    elements.list.append(group);
+    providerGroup.append(models);
+    elements.list.append(providerGroup);
   }
 }
 
 function showWork(work) {
   if (currentWorkId === work.id) return;
   currentWorkId = work.id;
+
+  const groups = modelGroups.get(work.model);
+  groups.provider.open = true;
+  groups.model.open = true;
+  requestAnimationFrame(() => {
+    if (currentWorkId !== work.id) return;
+    const button = buttons.get(work.id);
+    const listBounds = elements.list.getBoundingClientRect();
+    const buttonBounds = button.getBoundingClientRect();
+    if (buttonBounds.top < listBounds.top) {
+      elements.list.scrollTop += buttonBounds.top - listBounds.top;
+    } else if (buttonBounds.bottom > listBounds.bottom) {
+      elements.list.scrollTop += buttonBounds.bottom - listBounds.bottom;
+    }
+  });
 
   const svg = isSvg(work);
   const source = `./works/${encodeURIComponent(work.file)}`;
