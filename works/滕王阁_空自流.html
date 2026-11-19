@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#171d24">
+<link rel="icon" href="data:,">
+<title>空自流 · 滕王阁</title>
+<style>
+:root{color-scheme:dark;--ivory:#f5ebd8;--sand:#e6c792;--muted:#c7bca8;--line:#eadcc537;--edge:clamp(14px,3.4vw,48px)}
+*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0;overflow:hidden;font:13px/1.45 system-ui,"Microsoft YaHei",sans-serif;background:#19222b;color:var(--ivory)}button{font:inherit;color:inherit;cursor:pointer}button:focus-visible{outline:2px solid var(--sand);outline-offset:3px}[hidden]{display:none!important}
+#stage,#stage canvas,.scrim{position:fixed;inset:0;width:100%;height:100%}.scrim{pointer-events:none;background:linear-gradient(180deg,#090c13b0,transparent 20%,transparent 78%,#090c13d4)}
+header,footer{position:fixed;left:var(--edge);right:var(--edge);display:flex;align-items:center;justify-content:space-between;gap:10px}header{top:max(18px,env(safe-area-inset-top))}footer{bottom:max(19px,env(safe-area-inset-bottom));align-items:flex-end}
+.brand{display:flex;align-items:center;gap:11px;text-shadow:0 1px 8px #000a}.seal{width:36px;height:36px;display:grid;place-items:center;background:#8a352a;color:#fff1d7;border:1px solid #e4ad83;border-radius:3px;font:20px/1 "Songti SC",SimSun,serif}.brand h1{font:500 22px/1.1 "Songti SC",SimSun,serif;letter-spacing:.12em;margin:0}.brand small{display:block;color:var(--muted);font:9px ui-monospace,Consolas,monospace;letter-spacing:.19em;margin-top:5px}.toolbar{display:flex;gap:7px;align-items:center}.btn{min-height:36px;padding:6px 12px;background:#131820cf;border:1px solid var(--line);border-radius:5px;white-space:nowrap}.btn:hover,.btn[aria-pressed="true"]{border-color:var(--sand);color:var(--sand)}.primary{background:#e3c38e;color:#201712;border-color:#f0d7ac;font-weight:700}.primary:hover{background:#f2d7a7;color:#201712}
+.leftDock{min-width:0;text-shadow:0 1px 9px #000}.stats{font:11px ui-monospace,Consolas,monospace;letter-spacing:.045em;color:var(--sand)}.cap{display:flex;align-items:baseline;gap:9px;margin:4px 0 6px}.cap strong{font:500 21px "Songti SC",SimSun,serif}.cap small{color:var(--muted)}.track{display:flex;gap:3px;width:min(35vw,450px)}.tick{height:3px;background:#fff4;border-radius:2px;overflow:hidden}.tick i{display:block;background:var(--sand);height:100%;width:0}.rightDock{text-align:right;text-shadow:0 1px 8px #000;white-space:nowrap}.clock{color:var(--sand);font:13px ui-monospace,Consolas,monospace;margin-bottom:6px}.keys{color:#e6dfd0;font-size:11px}kbd{font:inherit;border:1px solid var(--line);border-radius:3px;padding:0 4px}
+#menu{position:fixed;top:68px;right:var(--edge);bottom:78px;width:min(387px,calc(100vw - 2*var(--edge)));display:flex;flex-direction:column;background:#141a22f5;border:1px solid var(--line);border-radius:7px;box-shadow:0 12px 38px #0006}.menuHead{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;border-bottom:1px solid var(--line)}.menuHead strong{font:500 17px "Songti SC",SimSun,serif}.menuHead small{color:var(--muted);margin-left:8px}.rows{overflow:auto;overscroll-behavior:contain;padding:0 8px 8px}.chapter{position:sticky;top:0;background:#19202a;color:var(--sand);font-size:11px;letter-spacing:.1em;padding:7px 8px;border-bottom:1px solid var(--line);z-index:1}.row{width:100%;text-align:left;border:0;background:none;border-radius:4px;display:grid;grid-template-columns:23px 1fr auto;gap:4px 8px;padding:8px;margin:2px 0}.row:hover,.row[aria-current=true]{background:#e6c7921b}.row[aria-current=true]{box-shadow:inset 2px 0 var(--sand)}.row b,.row time{font:11px ui-monospace,Consolas,monospace;color:var(--sand);align-self:center}.row small{grid-column:2/4;color:var(--muted);font-size:11px;line-height:1.45}.row strong{font-weight:600}.row time{white-space:nowrap}#report{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(88vw,380px);padding:19px 22px;background:#141a22f3;border:1px solid var(--line);border-radius:7px;z-index:4}
+@media(max-width:640px){header{flex-wrap:wrap;top:11px}.brand h1{font-size:19px}.brand small{font-size:8px}.brand .seal{width:29px;height:29px;font-size:16px}.toolbar{gap:4px}.btn{padding:5px 7px;min-height:31px;font-size:11px}#menu{top:87px;bottom:75px}.keys{font-size:9px}.stats{font-size:10px}.cap strong{font-size:17px}.cap small{display:none}.track{width:44vw}}
+@media(max-width:400px){.brand{width:100%}.toolbar{width:100%}.rightDock .keys{max-width:130px;white-space:normal}}
+</style>
+</head>
+<body>
+<div id="stage" aria-label="滕王阁三维短片"></div><div class="scrim" aria-hidden="true"></div>
+<header><div class="brand"><span class="seal" aria-hidden="true">滕</span><div><h1>空自流</h1><small>滕王阁 / 05:30</small></div></div>
+<div class="toolbar"><button class="btn primary" id="full" disabled>按顺序播放</button><button class="btn" id="play" disabled>播放</button><button class="btn" id="loop" aria-pressed="false" disabled>单镜循环</button><button class="btn" id="open" aria-expanded="false" aria-controls="menu">展开分镜</button></div></header>
+<aside id="menu" hidden aria-labelledby="menuTitle"><div class="menuHead"><div><strong id="menuTitle">分镜目录</strong><small>27 镜 · 05:30</small></div><button class="btn" id="close">收起</button></div><nav class="rows" id="rows" aria-label="27 个分镜"></nav></aside>
+<footer><div class="leftDock"><div class="stats" id="stats">01/27 · 00:00/00:09 · 00:00/05:30 · 0%</div><div class="cap"><strong id="caption">水下初醒</strong><small id="chapter">一 · 入景</small></div><div class="track" id="track" role="progressbar" aria-label="全片进度" aria-valuemin="0" aria-valuemax="330" aria-valuenow="0"></div></div><div class="rightDock"><div class="clock" id="clock">15:30</div><div class="keys"><kbd>空格</kbd> 播放／暂停　<kbd>←</kbd><kbd>→</kbd> 切镜</div></div></footer>
+<div id="report" role="status">正在准备三维场景…</div>
+<noscript>播放需要启用 JavaScript。</noscript>
+<script>
+'use strict';
+const shots=[
+ [9,'水下初醒','近景','贴面缓进','画框压在水线下，檐脊首先以倒影出现。',false],
+ [7,'碎金','近景','低位滑行、加速抬升','细波把倒影分成数段，水声只由画面暗示。',false],
+ [8,'江阶','近景','前推升高','实体晚于倒影入画；石阶从下缘掠过。',false],
+ [7,'朱灯','特写','沿檐侧升','灯笼先占前景，视线随后越过灯穗。',false],
+ [7,'瓦当檐兽','特写','斜掠、俯仰','沿滴水瓦转向翘角，再降入檐下。',false],
+ [7,'柱间裙影','近景','廊外横移','柱列分别掠过；裙摆从一侧入画。',true],
+ [10,'越肩见江','近景→全景','越肩加速','从人物肩后一侧掠过，人从边缘退出。',true],
+ [10,'层檐尽出','全景','沿楼身上升','视线越过重檐，台基、楼身和江岸显出。',false],
+ [12,'山水为席','大远景','航拍拉开','斜向上拉，楼落在江湾和远山之间。',false],
+ [11,'沿檐归窗','全景→近景','下降绕向上层','沿窗格靠近，准备从窗洞进入。',false],
+ [10,'一窗江天','中景','穿窗、回转','窗框圈住水天；人物留在窗边。',true],
+ [11,'云开光行','全景','出窗后从侧面横摇','云隙张开，光斑沿重檐与朱柱移动。',false],
+ [10,'双鸟入画','长焦','收焦并跟拍','以领鸟实时位置为视线，两鸟在光中振翅。',false],
+ [10,'落霞齐飞','长焦','随鸟平移、仰跟','两鸟同向掠过霞带；楼身退到视野之外。',false],
+ [11,'天水一色','长焦→大远景','迅速拉远、放开焦段','松开鸟群，水天相接，楼缩为岸边一点。',false],
+ [13,'金色将尽','大远景','缓缓横移','转入蓝调，暖色仅剩在地平线上。',false],
+ [13,'暮色临楼','大远景','缓推','以远山衬出楼的轮廓，推近幅度克制。',false],
+ [13,'渔舟唱晚','大远景','斜向缓移','孤舟入江，远岸被薄雾分开。',false],
+ [13,'水阔云低','大远景','渐拉远','扩大水面留白，楼在画面里变小。',false],
+ [14,'灯火相望','大远景','后退、横移','灯影落入江中，楼与舟各留一线暖色。',false],
+ [14,'霞线未尽','大远景','沿弧线横移','楼仍远，借最后一线天光转向归路。',false],
+ [17,'回阁','大远景→全景','沿江道回飞','保持同一轴线，由远岸回到高台。',false],
+ [14,'露台背影','中近景','平缓贴近','从背后看人物站在高栏前，面向晚霞。',true],
+ [14,'余霞','中景→全景','侧绕、上升','略过人物的背影和衣袖，借栏杆转入楼外。',true],
+ [20,'环楼而行','全景','连续环绕并拉远','由东侧绕过临江正面，栏柱从近处退去。',false],
+ [18,'楼在天边','远景','沿同向弧线继续拉远','与前镜合计环绕超过 120°，把阁留在边缘。',false],
+ [27,'空自流','大远景','几乎静止的横向漂移','将近半分钟留给夜空与流水，直到 21:00。',false]
+];
+const chapters=[[0,'一 · 入景'],[6,'二 · 登临江山'],[15,'三 · 唱晚'],[21,'四 · 收束']];
+let sum=0;
+shots.forEach((s,i)=>{s.start=sum;sum+=s[0];s.end=sum;s.chapter=chapters.filter(c=>c[0]<=i).at(-1)[1]});
+if(sum!==330||shots.length!==27)throw Error('分镜表时长错误');
+const $=id=>document.getElementById(id);
+const pad=n=>String(n).padStart(2,'0');
+const stamp=t=>`${pad(Math.floor(t/60))}:${pad(Math.floor(t%60))}`;
+const shotAt=t=>{const i=shots.findIndex(s=>t<s.end);return i<0?26:i};
+let time=0,playing=false,locked=-1,ready=false,prevUi='',prevShot=-1,dirty=true;
+const buttons=[],ticks=[];
+shots.forEach((s,i)=>{
+ const c=chapters.find(c=>c[0]===i);
+ if(c){const h=document.createElement('div');h.className='chapter';h.textContent=c[1];$('rows').append(h)}
+ const b=document.createElement('button');b.type='button';b.className='row';b.innerHTML=`<b>${pad(i+1)}</b><strong>${s[1]}</strong><time>${stamp(s.start)}–${stamp(s.end)} · ${s[0]}秒</time><small>${s[2]} · ${s[3]} · 人物${s[5]?'出场':'不出场'}<br>${s[4]}</small>`;
+ b.onclick=()=>jump(i);buttons.push(b);$('rows').append(b);
+ const tick=document.createElement('span');tick.className='tick';tick.style.flexGrow=s[0];tick.innerHTML='<i></i>';$('track').append(tick);ticks.push(tick.firstChild);
+});
+function menu(open,focus=false){$('menu').hidden=!open;$('open').setAttribute('aria-expanded',open);$('open').textContent=open?'收起分镜':'展开分镜';if(open)buttons[shotAt(time)].scrollIntoView({block:'nearest'});if(!open&&focus)$('open').focus()}
+$('open').onclick=()=>menu($('menu').hidden);$('close').onclick=()=>menu(false,true);
+function updateUI(force=false){
+ const i=locked<0?shotAt(time):locked,s=shots[i],shown=Math.floor(time),local=Math.floor(time-s.start),pct=Math.floor(time/3.3+1e-8),key=[i,shown,local,playing,locked].join('/');
+ if(force||key!==prevUi){
+  prevUi=key;$('stats').textContent=`${pad(i+1)}/27 · ${stamp(local)}/${stamp(s[0])} · ${stamp(shown)}/05:30 · ${pct}%`;$('caption').textContent=s[1];$('chapter').textContent=s.chapter;
+  const mins=930+shown;$('clock').textContent=`${pad(Math.floor(mins/60))}:${pad(mins%60)}`;$('track').setAttribute('aria-valuenow',shown);
+  $('play').textContent=playing?'暂停':time>=330?'重播':time?'继续':'播放';$('loop').setAttribute('aria-pressed',locked>=0);
+ }
+ if(i!==prevShot){if(prevShot>=0)buttons[prevShot].removeAttribute('aria-current');buttons[i].setAttribute('aria-current','true');if(playing&&!$('menu').hidden)buttons[i].scrollIntoView({block:'nearest'});prevShot=i;}
+ if(dirty||playing)for(let j=0;j<shots.length;j++)ticks[j].style.width=100*Math.max(0,Math.min(1,(time-shots[j].start)/shots[j][0]))+'%';
+}
+function jump(i){i=Math.max(0,Math.min(26,i));if(locked>=0)locked=i;time=shots[i].start;dirty=true;updateUI();}
+function toggle(){if(!ready)return;if(time>=330)time=0;playing=!playing;dirty=true;updateUI();}
+$('full').onclick=()=>{time=0;locked=-1;playing=true;dirty=true;menu(false);updateUI()};
+$('play').onclick=toggle;
+$('loop').onclick=()=>{if(locked>=0){locked=-1}else{locked=shotAt(time);time=shots[locked].start;playing=true}dirty=true;updateUI()};
+window.addEventListener('keydown',e=>{if(e.altKey||e.ctrlKey||e.metaKey||e.repeat)return;if(e.code==='Space'){if(e.target.closest('#menu'))return;e.preventDefault();toggle()}else if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();jump(shotAt(time)+(e.key==='ArrowLeft'?-1:1))}else if(e.key==='Escape'){menu(false,!$('menu').hidden)}});
+updateUI();
+</script>
+<script type="module">
+try {
+const T=await import('https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js');
+const scene=new T.Scene(), camera=new T.PerspectiveCamera(45,1,.035,3400);
+const renderer=new T.WebGLRenderer({antialias:false,powerPreference:'high-performance',alpha:false});
+renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.NoToneMapping;
+$('stage').append(renderer.domElement);
+const fog=scene.fog=new T.FogExp2(0x93a19f,.0017);
+const V=(x=0,y=0,z=0)=>new T.Vector3(x,y,z), C=c=>new T.Color(c), clamp=T.MathUtils.clamp, lerp=T.MathUtils.lerp;
+const sm=(a,b,x)=>T.MathUtils.smoothstep(x,a,b), PI=Math.PI;
+let seed=479;const rand=()=>((seed=Math.imul(seed,1664525)+1013904223|0)>>>0)/4294967296;
+const sun=new T.DirectionalLight(0xffdbab,2),hemi=new T.HemisphereLight(0xc2d8de,0x50443b,1.35),rim=new T.DirectionalLight(0xa9c0ec,.18);
+rim.position.set(24,30,-40);scene.add(sun,hemi,rim);
+const lightTime={value:0};
+const materials={};
+function lit(name,color){const m=new T.MeshLambertMaterial({color});materials[name]=m;return m}
+const red=lit('朱漆',0x9d3827),deep=lit('暗朱',0x492324),gold=lit('鎏金',0xc8974a),teal=lit('青绿斗拱',0x275a56),plaster=lit('粉壁',0xe5cb9b),wood=lit('木地板',0x725746),dark=lit('暗木',0x352425),tile=lit('琉璃瓦',0x2e5d54),edge=lit('瓦脊',0x497c68),stone=lit('台基',0x9c9282),sand=lit('坡岸',0x5c614b),trunk=lit('松干',0x4a3830),leaves=lit('松针',0x304838);
+const warm=new T.MeshLambertMaterial({color:0xb65a24,emissive:0xff9d38,emissiveIntensity:0});
+const silk=new T.MeshLambertMaterial({color:0xa62920,emissive:0xf04b12,emissiveIntensity:0});
+// 同一片低频云影沿世界坐标移动；只调节模型表面直射部分的明暗，不调用阴影贴图。
+for(const m of [red,teal,plaster,gold,tile,edge,stone]){
+ m.onBeforeCompile=s=>{
+  s.uniforms.filmTime=lightTime;
+  s.vertexShader='varying vec3 vFilmWorld;\n'+s.vertexShader;
+  s.vertexShader=s.vertexShader.replace('#include <worldpos_vertex>',`#include <worldpos_vertex>
+   vec4 cloudPoint=vec4(transformed,1.);
+   #ifdef USE_INSTANCING
+   cloudPoint=instanceMatrix*cloudPoint;
+   #endif
+   vFilmWorld=(modelMatrix*cloudPoint).xyz;`);
+  s.fragmentShader='varying vec3 vFilmWorld; uniform float filmTime;\n'+s.fragmentShader;
+  s.fragmentShader=s.fragmentShader.replace('#include <opaque_fragment>',`float streak=sin(vFilmWorld.x*.32+vFilmWorld.z*.14+vFilmWorld.y*.12-filmTime*.66)+.37*sin(vFilmWorld.z*.49-filmTime*.31);
+   float crossTower=smoothstep(93.,110.,filmTime)*(1.-smoothstep(125.,156.,filmTime));
+   outgoingLight *= 1.-crossTower*.31*(1.-smoothstep(-.37,.55,streak));
+   #include <opaque_fragment>`);
+ };
+}
+const cube=new T.BoxGeometry(1,1,1),cyl=new T.CylinderGeometry(1,1,1,10),cone=new T.CylinderGeometry(.38,1,1,8),orb=new T.SphereGeometry(1,12,8),ico=new T.IcosahedronGeometry(1,1),disk=new T.CylinderGeometry(1,1,1,16),batches=new Map();
+const temp=new T.Object3D(),up=V(0,1,0),mid=V(),axis=V();
+function add(g,m,x,y,z,w,h,d,rx=0,ry=0,rz=0,shade=1){
+ const key=g.uuid+m.uuid;if(!batches.has(key))batches.set(key,{g,m,items:[]});
+ temp.position.set(x,y,z);temp.rotation.set(rx,ry,rz);temp.scale.set(w,h,d);temp.updateMatrix();batches.get(key).items.push([temp.matrix.clone(),shade]);
+}
+function box(m,x,y,z,w,h,d,shade=1){add(cube,m,x,y,z,w,h,d,0,0,0,shade)}
+function stick(g,m,a,b,w,shade=1){
+ const key=g.uuid+m.uuid;if(!batches.has(key))batches.set(key,{g,m,items:[]});
+ temp.position.copy(mid.addVectors(a,b).multiplyScalar(.5));axis.subVectors(b,a);const length=axis.length();temp.quaternion.setFromUnitVectors(up,axis.multiplyScalar(1/length));temp.scale.set(w,length,w);temp.updateMatrix();batches.get(key).items.push([temp.matrix.clone(),shade]);
+}
+function mesh(g,m,parent=scene){const o=new T.Mesh(g,m);parent.add(o);return o}
+function part(parent,g,m,x,y,z,w,h,d){const o=mesh(g,m,parent);o.position.set(x,y,z);o.scale.set(w,h,d);return o}
+// 天穹、云带、星、日月均由方向和同一个时间值生成。
+const skyU={skyTop:{value:C(0x537d9e)},horizon:{value:C(0xe8c9a5)},band:{value:C(0xffb26b)},sunDir:{value:V()},moonDir:{value:V(.83,.24,.50).normalize()},ft:{value:0},night:{value:0},cloudOpen:{value:0},sunPower:{value:1}};
+const skyMat=new T.ShaderMaterial({uniforms:skyU,side:T.BackSide,depthWrite:false,vertexShader:`varying vec3 ray;
+ void main(){ray=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+ fragmentShader:`varying vec3 ray; uniform vec3 skyTop,horizon,band,sunDir,moonDir;
+ uniform float ft,night,cloudOpen,sunPower;
+ float hash(vec2 p){p=fract(p*vec2(.1031,.0973));p+=dot(p,p.yx+33.33);return fract((p.x+p.y)*p.x);}
+ float N(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+1.),f.x),f.y);}
+ void main(){vec3 d=normalize(ray);float e=max(d.y,0.);float sd=max(dot(d,sunDir),0.);float md=max(dot(d,moonDir),0.);
+ vec3 c=mix(horizon,skyTop,pow(smoothstep(-.03,.72,d.y),.55));
+ c=mix(c,band,(.12+.78*pow(sd,5.))*exp(-7.5*abs(d.y-.075))*sunPower);
+ c+=band*(pow(sd,39.)*.27+pow(sd,1120.)*1.32)*sunPower;
+ c+=vec3(.36,.54,.86)*(pow(md,120.)*.055+smoothstep(.99974,.99986,md)*.57)*night;
+ vec2 sp=d.xz/(max(.015,e)+.25);sp=sp*vec2(3.,7.)+vec2(ft*.010,-ft*.003);
+ float nn=N(sp)*.57+N(sp*2.07+8.)*.26+N(sp*4.13)*.12+N(sp*8.1)*.05;
+ float cloud=smoothstep(.42+cloudOpen*.14,.69+cloudOpen*.10,nn)*smoothstep(.008,.085,e);
+ vec3 cloudColor=mix(mix(skyTop*.65,band*.77,pow(sd,2.)*sunPower),vec3(.026,.041,.068),night);
+ c=mix(c,cloudColor,cloud*.80);
+ c+=band*max(0.,nn-.55)*smoothstep(.63,.98,sd)*sunPower*1.1*smoothstep(.03,.19,e);
+ vec2 st=vec2(atan(d.z,d.x),asin(d.y))*99.;vec2 f=fract(st)-.5;float h=hash(floor(st));
+ c+=vec3(.83,.91,1.)*night*smoothstep(.989,1.,h)*(1.-smoothstep(.03,.20,length(f)))*smoothstep(.06,.25,e)*(1.-cloud);
+ gl_FragColor=vec4(c,1.);
+ #include <colorspace_fragment>
+ }`});
+const sky=mesh(new T.SphereGeometry(2600,32,20),skyMat);sky.frustumCulled=false;sky.renderOrder=-100;
+// 江岸走向、起伏山脊和松林。每个山脊都是带斜坡的三维网格。
+function ridge(ox,oz,width,base,height,depth,ang,color,phase){
+ const data=[], idx=[], colors=[], col=C(color);
+ for(let i=0;i<=72;i++){
+  const u=i/72, x=(u-.5)*width, crest=height*(.22+.56*Math.pow(.5+.5*Math.sin(u*19+phase+Math.sin(u*8)*.8),1.7)+.16*Math.sin(u*77+phase)+.1*Math.cos(u*43));
+  for(let j=0;j<7;j++){
+   const v=j/6, z=(v-.5)*depth, y=base+crest*Math.pow(Math.sin(v*PI),1.45)*( .88+.12*Math.sin(i*.88+j*.77));
+   data.push(ox+x*Math.cos(ang)+z*Math.sin(ang),y,oz+z*Math.cos(ang)-x*Math.sin(ang));
+   const val=.76+j*.045+.065*Math.sin(i*.57+j*.62);colors.push(col.r*val,col.g*val,col.b*val);
+  }
+ }
+ for(let i=0;i<72;i++)for(let j=0;j<6;j++){const a=i*7+j;idx.push(a,a+1,a+7,a+7,a+1,a+8)}
+ const geo=new T.BufferGeometry();geo.setAttribute('position',new T.Float32BufferAttribute(data,3));geo.setAttribute('color',new T.Float32BufferAttribute(colors,3));geo.setIndex(idx);geo.computeVertexNormals();mesh(geo,new T.MeshLambertMaterial({vertexColors:true,side:T.DoubleSide}));
+}
+ridge(0,-58,460,-.8,15,118,.015,0x637253,2);
+ridge(-42,-155,780,-3,53,165,.04,0x617571,2.6);
+ridge(80,-278,1140,-5,85,195,-.1,0x667c80,4);
+ridge(-590,60,970,-4,81,193,1.28,0x657a70,1);
+ridge(590,217,960,-4,75,158,1.34,0x566f6c,3);
+ridge(0,625,1400,-4,70,185,.07,0x526d68,1.1);
+ridge(85,840,1800,-5,112,215,-.04,0x657d80,2.2);
+ridge(365,345,116,-1,12,30,.22,0x52665e,4.2);
+function pine(x,y,z,size){
+ let b=V(x,y,z);for(let j=0;j<4;j++){
+  const n=V(x+(j+1)*size*.11,y+size*(j+1)*.23,z+Math.sin(j*1.9)*size*.12);stick(cone,trunk,b,n,size*(.044-j*.008));
+  if(j>0){for(let k=0;k<3;k++){
+   const a=k*2.09+j*.93;const q=n.clone().add(V(Math.cos(a)*size*(.39-j*.055),size*.05,Math.sin(a)*size*(.39-j*.055)));stick(cone,trunk,n,q,size*.024);
+   add(ico,leaves,q.x,q.y+.17*size,q.z,size*(.38-j*.035),size*.20,size*(.34-j*.025),0,a,0,.74+rand()*.38);
+  }}b=n;
+ }
+ add(ico,leaves,b.x,b.y+.08*size,b.z,size*.27,size*.23,size*.24,0,0,0,1.05);
+}
+for(let i=0;i<70;i++){
+ const x=(rand()-.5)*180,z=-18-rand()*25;
+ pine(x,-.6+(Math.abs(z)-18)*.20,z,2.1+rand()*4.8);
+}
+for(const x of [-31,-24,25,34])pine(x,.53,-9+rand()*4,4+rand()*3);
+for(let i=0;i<74;i++){
+ const side=i%2?1:-1,x=side*(21+rand()*67),z=-16+rand()*16;
+ add(ico,stone,x,.05+rand()*.21,z,.45+rand()*1.5,.2+rand()*.6,.5+rand()*.8,0,rand()*PI,0,.55+rand()*.35);
+}
+// 石阶、台基、压顶与栏板。
+box(stone,0,1.35,-.5,39,3.1,27,.81);box(stone,0,3.24,-.5,36,1.0,25,.91);box(stone,0,4.56,-.5,34.5,1.62,27,1.06);
+box(stone,0,5.30,-.5,35,.16,27.3,1.2);
+for(const z of [-14,13])for(let j=-8;j<=8;j++){
+ if(z>0&&Math.abs(j)<3)continue;
+ box(stone,j*1.95,5.79,z,1.83,.47,.19,.88);box(stone,j*1.95,6.07,z,1.94,.105,.26,1.16);box(stone,j*1.95-.95,5.82,z,.19,.9,.21,1.1);
+}
+for(const x of [-17,17])for(let j=-6;j<=6;j++){box(stone,x,5.77,j*1.99,.19,.46,1.88,.91);box(stone,x,6.06,j*1.99,.28,.11,2.01,1.18);}
+for(let i=0;i<22;i++){
+ const h=(22-i)*.241,z=13.36+i*.49;box(stone,0,h/2-.05,z,9.55,h+.1,.55,.76+rand()*.18);box(stone,0,h-.021,z,9.68,.071,.57,1.03+rand()*.1);
+ for(const x of [-5.0,5.0])box(stone,x,h*.5+.08,z,.38,h+.36,.53,.91);
+}
+for(let i=0;i<66;i++){
+ const y=.4+(i%5)*.81,x=(Math.floor(i/5)-6)*2.62+((i%5)%2)*.43;
+ if(Math.abs(x)>5.1)box(stone,x,y,13.015,2.58,.018,.023,.57);
+}
+// 曲面歇山顶：长脊、四坡、翘角瓦当、角脊与成排瓦垄。
+function roof(y,w,d,rise){
+ const corners=[[1,1],[1,-1],[-1,-1],[-1,1]];
+ function roofPt(face,u,v){
+  const [xa,za]=corners[face],[xb,zb]=corners[(face+1)%4];
+  const x=lerp(xa,xb,u),z=lerp(za,zb,u),c=Math.pow(Math.abs(2*u-1),7);
+  return V(x*w*lerp(1,.42,v),y+rise*Math.pow(v,1.55)+.90*c*Math.pow(1-v,3)-.08*Math.sin(PI*u)*(1-v),z*d*(1-v));
+ }
+ const p=[],ind=[];
+ for(let f=0;f<4;f++){
+  const base=p.length/3,n=40,m=10;
+  for(let j=0;j<=m;j++)for(let i=0;i<=n;i++)p.push(...roofPt(f,i/n,j/m).toArray());
+  for(let j=0;j<m;j++)for(let i=0;i<n;i++){const a=base+j*(n+1)+i;ind.push(a,a+1,a+n+1,a+1,a+n+2,a+n+1)}
+  // 细瓦垄用真正的曲面条带生成，避免数千根管带来的绘制开销。
+  const count=f%2===0?Math.round(d*4.0):Math.round(w*4.0),tPos=[],tInd=[];
+  for(let k=1;k<count;k++){
+   const u=k/count,start=tPos.length/3;
+   for(let j=0;j<=8;j++)for(let s=-1;s<=1;s++){
+    const q=roofPt(f,u+s*.24/count,j*.118);q.y+=s===0?.081:.021;tPos.push(...q.toArray());
+   }
+   for(let j=0;j<8;j++)for(let k=0;k<2;k++){const a=start+j*3+k;tInd.push(a,a+1,a+3,a+1,a+4,a+3)}
+   const q=roofPt(f,u,0);add(disk,k%4===0?gold:edge,q.x,q.y-.009,q.z,.085,.13,.085,f%2?PI/2:0,0,f%2?0:PI/2);
+  }
+  const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(tPos,3));g.setIndex(tInd);g.computeVertexNormals();mesh(g,edge);
+  for(let j=0;j<20;j++){
+   const a=roofPt(f,j/20,0),b=roofPt(f,(j+1)/20,0);a.y-=.077;b.y-=.077;stick(cyl,deep,a,b,.13);a.y+=.21;b.y+=.21;stick(cyl,edge,a,b,.063);
+  }
+  for(let j=0;j<12;j++){
+   const a=roofPt(f,0,j/12),b=roofPt(f,0,(j+1)/12);a.y+=.13;b.y+=.13;stick(cyl,edge,a,b,.15);
+  }
+  const q=roofPt(f,0,.031);
+  add(orb,edge,q.x,q.y+.23,q.z,.25,.29,.23,0,0,0,1.16);
+  for(let i=0;i<4;i++){
+   const a=roofPt(f,0,.05+i*.051);add(ico,gold,a.x,a.y+.20,a.z,.102,.19,.12,0,.9,0,.83+i*.035);
+  }
+  const q1=q.clone().add(V(0,.2,0)),q2=q.clone().add(V(corners[f][0]*.42,.55,corners[f][1]*.34));stick(cone,edge,q1,q2,.20);
+  add(orb,edge,q2.x,q2.y+.10,q2.z,.18,.22,.11);add(ico,gold,q2.x,q2.y+.31,q2.z,.085,.12,.08);
+ }
+ const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(p,3));g.setIndex(ind);g.computeVertexNormals();mesh(g,tile);
+ for(let i=0;i<3;i++)box(i===1?gold:edge,0,y+rise+.05+i*.12,0,w*(.87-i*.02),.17,.31-i*.034);
+ for(const s of [-1,1]){
+  stick(cone,edge,V(s*w*.41,y+rise+.15,0),V(s*w*.49,y+rise+.79,0),.28);
+  add(orb,gold,s*w*.478,y+rise+.75,0,.14,.15,.16);
+ }
+}
+// 屋面条带在下方也可见，瓦片曲面双面参与反射。
+tile.side=T.DoubleSide;edge.side=T.DoubleSide;
+const floors=[
+ [5.36,4.68,12.2,7.85,14.45,10.25,3.10], [11.27,3.27,10.66,6.55,12.75,8.82,2.44],
+ [15.67,4.14,9.82,6.13,11.83,8.30,2.60], [20.92,3.02,8.49,5.63,10.35,7.36,2.08],
+ [24.99,3.66,7.49,5.02,9.36,6.72,2.12], [29.69,3.68,6.55,4.53,8.40,6.12,3.20]
+];
+const lanterns=[];
+function lantern(x,y,z,phase){
+ const g=new T.Group();scene.add(g);g.position.set(x,y,z);const body=part(g,orb,silk,0,-.48,0,.32,.46,.32);
+ part(g,cyl,dark,0,-.058,0,.018,.24,.018);part(g,disk,gold,0,-.14,0,.20,.055,.20);part(g,disk,gold,0,-.83,0,.20,.055,.20);part(g,cone,silk,0,-1.0,0,.062,.29,.062);
+ lanterns.push([g,body,phase]);
+}
+function rail(x0,x1,z,y){
+ const w=x1-x0;box(deep,(x0+x1)/2,y+.78,z,w,.11,.16);box(red,(x0+x1)/2,y+.24,z,w,.10,.13);
+ for(let j=0;j<=Math.floor(w/.42);j++){
+  const x=lerp(x0,x1,j/Math.floor(w/.42));box(j%4===0?gold:red,x,y+.51,z,.075,.53,.10);
+  if(j%4===0)add(orb,gold,x,y+.87,z,.074,.07,.075);
+ }
+}
+floors.forEach(([y,h,w,d,rw,rd,rise],li)=>{
+ const wy=y+h;box(deep,0,y-.14,0,w*2+.62,.32,d*2+.63);box(wood,0,y+.02,0,w*2+.69,.08,d*2+.68);box(teal,0,y-.32,0,w*2+.32,.17,d*2+.43);
+ const iw=w*.80,iz=d*.77,bays=li<3?7:5,span=2*iw/bays;
+ for(const z of [-d,d]){
+  box(red,0,wy-.22,z,w*2+.45,.33,.30);box(teal,0,wy-.51,z,w*2+.28,.22,.24);box(gold,0,wy-.42,z,w*2+.3,.049,.26);
+  for(let j=0;j<=bays;j++){
+   const x=lerp(-w,w,j/bays);add(cyl,red,x,y+(h-.29)/2,z,li===0?.22:.17,h-.29,li===0?.22:.17);
+   add(disk,stone,x,y+.18,z,.28,.34,.28);add(disk,deep,x,y+h-.68,z,.23,.13,.23);
+   for(let k=0;k<4;k++)box(k%2?teal:deep,x,y+h-.48+k*.126,z,.40+k*.12,.115,.37+k*.12);
+   box(gold,x,wy-.02,z,.92,.056,.66);
+  }
+ }
+ for(const x of [-w,w]){
+  box(red,x,wy-.21,0,.31,.34,d*2);box(teal,x,wy-.49,0,.27,.19,d*2);
+  for(let k=1;k<=3;k++){
+   const z=lerp(-d,d,k/4);add(cyl,red,x,y+(h-.32)/2,z,.186,h-.32,.186);
+   add(disk,stone,x,y+.16,z,.25,.3,.25);box(teal,x,wy-.36,z,.48,.18,.47);box(gold,x,wy-.22,z,.68,.078,.63);
+  }
+  box(plaster,x*.80,y+h*.50,0,.17,h-.40,iz*2,.9);
+ }
+ for(const s of [-1,1])for(let j=0;j<bays;j++){
+  const x=-iw+(j+.5)*span,z=s*iz,open=(li===3&&s>0&&j===2)||(li===0&&s>0&&j===3);
+  if(!open){
+   box(plaster,x,y+.6,z,span,.98,.21,1.03);
+   box(warm,x,y+h*.53,z,span*.81,h*.52,.123);
+   for(let k=1;k<=7;k++)box(deep,x+span*((k/8)-.5)*.78,y+h*.53,z+s*.084,.044,h*.54,.05);
+   for(let k=1;k<=5;k++)box(deep,x,y+h*(.24+k*.091),z+s*.093,span*.84,.040,.046);
+  }else if(li===3){box(dark,x,y+.36,z,span,.56,.19);box(gold,x,y+.67,z,span,.076,.30)}
+  box(red,x-span/2,y+h*.49,z,.143,h-.25,.26);box(red,x+span/2,y+h*.49,z,.143,h-.25,.26);
+  box(teal,x,y+h-.35,z,span,.36,.24);box(gold,x,y+h-.45,z,span,.043,.26);
+ }
+ if(li>0){
+  if(li===3){rail(-w,-1.74,d+.24,y);rail(1.75,w,d+.24,y)}else rail(-w,w,d+.21,y);
+  rail(-w,w,-d-.19,y);
+  for(const x of [-w,w]){
+   box(red,x,y+.78,0,.12,.096,d*2);
+   for(let k=-5;k<=5;k++)box(red,x,y+.50,k*d/5,.12,.58,.082);
+  }
+ }
+ for(const x of [-w*.73,-w*.27,w*.27,w*.73]){
+  if(li===0||li===2||li===4)lantern(x,wy-.57,d+.2,li+x);
+  else if(li===5)lantern(x,wy-.51,-d-.22,li+x);
+ }
+ if(li===0)for(const z of [-4.0,2.7])lantern(w+.18,wy-.5,z,z);
+ // 地板缝、彩绘短椽
+ if(li===0||li===3)for(let j=-18;j<=18;j++)box(dark,j*w/18,y+.064,0,.016,.007,d*2,.89);
+ for(const s of [-1,1])for(let j=-10;j<=10;j++){
+  const x=j*w/10,z=s*d;box(j%2?deep:teal,x,wy-.047,z,.143,.11,(rd-d)*1.88);if(j%2===0)box(gold,x,wy-.07,z+s*(rd-d)*.93,.11,.06,.064);
+ }
+ roof(wy,rw,rd,rise);
+});
+// 独立露台连接上层前廊，在空中的回程中可辨认。
+box(stone,0,20.81,7.15,13.7,.34,3.0,.83);box(wood,0,20.995,7.15,13.62,.09,2.94);
+rail(-6.71,6.71,8.61,21.03);
+for(const x of [-6.73,6.73]){box(red,x,21.79,7.38,.14,.14,2.48);for(let j=0;j<5;j++)box(red,x,21.43,6.31+j*.52,.11,.73,.09);}
+box(teal,0,32.5,4.62,2.66,.72,.19);box(gold,0,32.89,4.75,2.78,.09,.09);box(gold,0,32.11,4.75,2.78,.09,.09);
+// 檐下匾额为本页生成的纹理，无外部图片。
+const plaque=document.createElement('canvas');plaque.width=384;plaque.height=108;
+const px=plaque.getContext('2d');px.fillStyle='#173f3c';px.fillRect(0,0,384,108);px.strokeStyle='#ba8b45';px.lineWidth=6;px.strokeRect(9,9,366,90);px.fillStyle='#eccb89';px.font='bold 63px KaiTi, STKaiti, serif';px.textAlign='center';px.textBaseline='middle';px.fillText('滕 王 阁',192,57);
+const plaqueTexture=new T.CanvasTexture(plaque);plaqueTexture.colorSpace=T.SRGBColorSpace;
+const plaqueMat=new T.MeshLambertMaterial({map:plaqueTexture});const sign=mesh(new T.PlaneGeometry(2.71,.74),plaqueMat);sign.position.set(0,32.50,4.75);
+for(const {g,m,items} of batches.values()){
+ const o=new T.InstancedMesh(g,m,items.length),color=C(0xffffff);for(let i=0;i<items.length;i++){o.setMatrixAt(i,items[i][0]);o.setColorAt(i,color.setScalar(items[i][1]));}scene.add(o);
+}
+// 一位人物，分别在江阶廊口、窗边和露台出现。衣服由不同截面的旋转曲面组成。
+const char=new T.Group();scene.add(char);const auburn=lit('绛衣',0x873d44),inner=lit('浅绢',0xcda67e),sash=lit('束带',0x3b454d),skin=lit('肤色',0xd1a787),hair=lit('发髻',0x242027);
+function lathe(pts,m){return mesh(new T.LatheGeometry(pts.map(([a,b])=>new T.Vector2(a,b)),20),m,char)}
+const gown=lathe([[.05,.05],[.38,.045],[.40,.10],[.35,.26],[.30,.51],[.24,.82],[.18,1.0],[.178,1.20],[.17,1.33],[.0,1.36]],auburn);
+lathe([[.40,.062],[.399,.095],[.375,.155]],inner);
+lathe([[.203,.80],[.193,.90],[.184,.955]],sash);
+part(char,orb,auburn,0,1.24,0,.27,.24,.165);part(char,cyl,skin,0,1.47,0,.072,.15,.068);
+part(char,orb,skin,0,1.62,.016,.121,.153,.114);part(char,orb,hair,0,1.676,-.039,.133,.142,.119);part(char,orb,hair,.017,1.79,-.075,.092,.092,.087);part(char,orb,gold,.081,1.8,-.089,.062,.018,.016);
+const sleeves=[];for(const s of [-1,1]){const o=part(char,orb,auburn,s*.245,1.08,0,.135,.278,.17);o.rotation.z=s*.28;sleeves.push(o);part(char,orb,inner,s*.297,.92,.043,.075,.075,.11);}
+const cloth=mesh(new T.PlaneGeometry(.16,.63,3,10),new T.MeshLambertMaterial({color:0x7d9383,side:T.DoubleSide}),char);cloth.position.set(.13,.59,-.226);cloth.rotation.z=.17;
+// 两只真正有翅膀、尾羽和身体的鸟。领鸟坐标同时驱动长焦视线。
+const birds=[],birdInk=lit('鸟羽',0x3c3a3b),birdWhite=lit('鸟腹',0xd8c7ae);
+function wingGeometry(){const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute([0,0,.20,.67,.02,.25,1.27,-.015,-.03,1.65,-.08,-.35,.99,-.075,-.28,.36,-.05,-.41,0,0,-.25],3));g.setIndex([0,1,5,1,2,4,2,3,4,1,4,5,0,5,6]);g.computeVertexNormals();return g;}
+birdInk.side=T.DoubleSide;
+for(let i=0;i<2;i++){
+ const g=new T.Group();scene.add(g);part(g,orb,birdWhite,0,0,0,.15,.14,.48);part(g,orb,birdWhite,0,.041,.42,.089,.082,.137);
+ const tail=part(g,cone,birdInk,0,-.019,-.44,.21,.37,.11);tail.rotation.x=PI/2;
+ const wings=[];for(const s of [-1,1]){const w=mesh(wingGeometry(),birdInk,g);w.scale.x=s;wings.push(w);}birds.push([g,wings]);
+}
+const flight=(t,i=0)=>V(19+(t-108)*2.38-i*3.6,38+(t-108)*.32+Math.sin(t*.6-i)*.53-i*1.07,-13-(t-108)*1.34+i*4.6);
+// 江上渔舟。木船、篷、桅与一盏小灯随时间移动，投影也进入反射通道。
+const boats=[];
+for(let i=0;i<3;i++){
+ const g=new T.Group();scene.add(g);g.scale.setScalar(1+i*.16);
+ part(g,orb,dark,0,.12,0,.72,.29,3.85);part(g,cube,wood,0,.33,0,.88,.16,5.0);part(g,orb,wood,0,.61,-.29,.60,.65,1.48);
+ part(g,cyl,dark,.14,.77,1.46,.028,1.31,.028);part(g,orb,warm,.14,1.24,1.46,.12,.16,.12);boats.push(g);
+}
+// 平面实时反射。用镜像相机渲染到较小的线性颜色缓冲区，再按世界坐标投影取样。
+const mirror=new T.PerspectiveCamera(), reflection=new T.WebGLRenderTarget(1,1,{depthBuffer:true,minFilter:T.LinearFilter,magFilter:T.LinearFilter});
+const cut=new T.Plane(V(0,1,0),.03),projectionToTexture=new T.Matrix4(),bias=new T.Matrix4().set(.5,0,0,.5,0,.5,0,.5,0,0,.5,.5,0,0,0,1);
+const waterU={mirrorColor:{value:reflection.texture},projectMirror:{value:projectionToTexture},ft:{value:0},waterColor:{value:C(0x3e605c)},horizon:{value:C(0xc3b5a3)},sunDir:skyU.sunDir,sunPower:skyU.sunPower,night:skyU.night,mist:{value:.001},opening:{value:1}};
+const waterMat=new T.ShaderMaterial({uniforms:waterU,vertexShader:`uniform mat4 projectMirror; varying vec3 world; varying vec4 refl;
+ void main(){vec4 w=modelMatrix*vec4(position,1.);world=w.xyz;refl=projectMirror*w;gl_Position=projectionMatrix*viewMatrix*w;}`,
+ fragmentShader:`uniform sampler2D mirrorColor;uniform float ft,sunPower,night,mist,opening;uniform vec3 waterColor,horizon,sunDir;varying vec3 world;varying vec4 refl;
+ void main(){
+  vec3 v=cameraPosition-world;float distanceToEye=length(v);v=normalize(v);vec2 p=world.xz;
+  float n1=sin(dot(p,vec2(.39,.77))-ft*1.23),n2=sin(dot(p,vec2(-.66,1.13))-ft*1.72),n3=cos(dot(p,vec2(1.43,2.03))-ft*2.18);
+  float fade=1.-smoothstep(42.,340.,distanceToEye);vec2 waves=vec2(.59*n1-.35*n2+.11*n3,.31*n1+.50*n2+.13*n3);
+  vec2 uv=refl.xy/max(.001,refl.w);uv+=waves*(.0013+.0037*fade)*(1.-.46*opening);uv=clamp(uv,.0015,.9985);
+  vec3 reflected=texture2D(mirrorColor,uv).rgb;float F=.36+.59*pow(1.-clamp(v.y,0.,1.),3.);F=mix(F,.87,opening);
+  vec3 N=normalize(vec3(waves.x*.14,1.,waves.y*.12));float shine=pow(max(dot(N,normalize(sunDir+v)),0.),82.)*sunPower;
+  float glitter=max(0.,n1*n2)*(.1+.9*fade);
+  vec3 col=mix(waterColor*(.91+.11*n1+.034*n3*fade),reflected,F);
+  col+=vec3(.98,.46,.14)*shine*(.13+glitter*.26);
+  col=mix(col,horizon,1.-exp(-distanceToEye*distanceToEye*mist*mist*.51));
+  gl_FragColor=vec4(col,1.);
+  #include <colorspace_fragment>
+ }`});
+const water=mesh(new T.PlaneGeometry(4100,4100),waterMat);water.rotation.x=-PI/2;water.updateMatrixWorld();
+const backAim=V(),mirroredUp=V(),lookDir=V(),fwd=V(),worldRight=V(),worldUp=V();
+function reflectView(){
+ mirror.copy(camera,false);mirror.position.y=-camera.position.y;
+ fwd.set(0,0,-1).applyQuaternion(camera.quaternion);fwd.y=-fwd.y;
+ mirroredUp.set(0,1,0).applyQuaternion(camera.quaternion);mirroredUp.y=-mirroredUp.y;
+ mirror.up.copy(mirroredUp);mirror.lookAt(backAim.copy(mirror.position).add(fwd));mirror.updateMatrixWorld();
+ projectionToTexture.copy(bias).multiply(mirror.projectionMatrix).multiply(mirror.matrixWorldInverse);
+ water.visible=false;renderer.clippingPlanes=[cut];renderer.setRenderTarget(reflection);renderer.render(scene,mirror);
+ renderer.setRenderTarget(null);renderer.clippingPlanes=[];water.visible=true;
+}
+// 以每镜中点为轨迹控制点；相邻段采用 Catmull–Rom 曲线，保留速度方向，不作硬切。
+const cameraPath=[
+ [0,.24,37, 0,.15,20],[0,.46,29, 0,.20,14],[1,1.1,24, 0,3.1,1],[7,5.6,15, 0,8,0],[12,10,8, 0,14,0],[10,10.2,4, 0,11,0],
+ [7.8,12.0,6, 0,14,0],[2.3,19,24, 0,13,0],[3,61,127, 0,12,0],[18,31,27, 0,18,0],[0,23,13, 0,23,-5],[24,27,13, 0,16,0],
+ [14,34,21, 27,39,-18],[20,38,25, 39,43,-26],[21,63,96, 0,23,0],[0,64,145, 0,18,0],[2,45,119, 0,17,0],[3,34,108, 0,14,0],
+ [-5,29,123, 0,15,0],[-4,39,153, 0,17,0],[-4,50,175, 0,18,0],[0,43,131, 0,20,0],[0,30,65, 0,22,7],[0,24,12, 0,24,0],
+ [15,27,16, 0,20,0],[30,30,18, 0,20,0],[63,49,104, 0,14,0]
+].map(a=>({p:V(a[0],a[1],a[2]),q:V(a[3],a[4],a[5])}));
+const centers=shots.map(s=>(s.start+s.end)*.5);
+function pathAt(t){
+ let i=0;while(i<centers.length-2&&t>centers[i+1])i++;
+ let u=clamp((t-centers[i])/(centers[i+1]-centers[i]),0,1);
+ const a=cameraPath[Math.max(0,i-1)],b=cameraPath[i],c=cameraPath[i+1],d=cameraPath[Math.min(cameraPath.length-1,i+2)];
+ const curve=(key)=>new T.CatmullRomCurve3([a[key],b[key],c[key],d[key]],false,'catmullrom',.42).getPoint((1+u)/3);
+ // 控制点区间的端点切线由相邻段自然延续，避免拐点速度归零。
+ return {p:curve('p'),q:curve('q')};
+}
+const birdAim=V(),cameraAim=V(),lastCamera=V();
+function sceneTime(t){
+ const day=clamp(t/330,0,1),sunset=sm(.18,.74,day),night=sm(.58,.96,day);
+ const tod=day*5.5,angle=PI*(.50-day*.90);
+ const sunDir=V(Math.cos(angle)*.72,Math.sin(angle),.35).normalize();
+ skyU.sunDir.value.copy(sunDir);skyU.night.value=night;skyU.sunPower.value=1-.97*night;
+ skyU.ft.value=t;skyU.cloudOpen.value=sm(105,141,t)*.72;
+ skyU.skyTop.value.copy(C(0x5c83a1)).lerp(C(0x07101e),night).lerp(C(0x465f78),sunset*.28);
+ skyU.horizon.value.copy(C(0xe8c69d)).lerp(C(0x28364b),night).lerp(C(0xdf8d70),sunset*.39);
+ skyU.band.value.copy(C(0xffbf77)).lerp(C(0x8c7390),night*.86);
+ hemi.intensity=lerp(1.25,.20,night);hemi.color.set(0xb7cbd3).lerp(C(0x43526c),night);hemi.groundColor.set(0x50443b).lerp(C(0x111924),night);
+ sun.position.copy(sunDir).multiplyScalar(120);sun.intensity=lerp(2.0,.14,night);sun.color.set(0xffd9aa).lerp(C(0x8b9bb8),night);
+ rim.intensity=lerp(.19,.38,night);fog.color.copy(skyU.horizon.value).lerp(skyU.skyTop.value,.36);fog.density=lerp(.00125,.00255,night);
+ lightTime.value=t;waterU.ft.value=t;waterU.sunDir.value.copy(sunDir);waterU.mist.value=fog.density;
+ for(const m of [warm.material||warm,silk]){} // warm emissive lights are controlled below.
+ warm.emissiveIntensity=lerp(.02,.95,night);silk.emissiveIntensity=lerp(0,.67,night);
+ for(const [g,body,phase] of lanterns){const glow=sm(176,295,t);body.material.emissiveIntensity=glow*(.22+.13*Math.sin(t*.17+phase));}
+ for(const b of boats){b.position.set(Math.sin(t*.018+b.id*.4)*5,0,18+((t*.34+b.id*23)%78));b.rotation.y=.025*Math.sin(t*.032+b.id);}
+ for(let i=0;i<birds.length;i++){
+  const [g,wings]=birds[i],p=flight(t,i);g.position.copy(p);g.rotation.y=.20;g.rotation.z=.08*Math.sin(t*1.5+i);
+  for(let k=0;k<2;k++)wings[k].rotation.z=(k===0?1:-1)*(.12+.48*Math.sin(t*5.7+i*.8));
+ }
+ // 人物只在指定段落出现；连续淡入淡出，位置沿廊道移入而非瞬间弹出。
+ let vis=0,cp=V(0,0,0),face=0;
+ const actorWindows=[{a:37,b:55,p:V(-2.5,5.42,11.2),r:.2},{a:94,b:109,p:V(-1.5,11.34,8.45),r:PI},{a:234,b:270,p:V(0,21.08,7.05),r:PI}];
+ for(const w of actorWindows){const v=sm(w.a,w.a+3,t)*(1-sm(w.b-3,w.b,t));if(v>vis){vis=v;cp.copy(w.p);face=w.r}}
+ char.visible=vis>.01;char.position.copy(cp);char.rotation.y=face;
+ for(const sleeve of sleeves)sleeve.rotation.z+=0; // 保持衣袖几何稳定，身体随时间轻微呼吸。
+ char.position.y=cp.y+Math.sin(t*1.3)*.012*vis;
+}
+function updateCamera(t){
+ const c=pathAt(t);camera.position.copy(c.p);cameraAim.copy(c.q);
+ // 13–15 镜使用领鸟的实际位置取景，长焦视角持续追随飞行轨迹。
+ const follow=sm(116,124,t)*(1-sm(143,151,t));
+ if(follow>.001){birdAim.copy(flight(t,0));cameraAim.lerp(birdAim,follow*.92);camera.fov=lerp(45,23,follow)}else camera.fov=45;
+ camera.lookAt(cameraAim);camera.updateProjectionMatrix();
+}
+function resize(){const w=innerWidth,h=innerHeight;renderer.setPixelRatio(Math.min(devicePixelRatio||1,1.1));renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();
+ reflection.setSize(Math.min(768,Math.max(512,Math.floor(w*.58))),Math.min(512,Math.max(320,Math.floor(h*.58))));dirty=true;
+}
+window.addEventListener('resize',resize);resize();
+const report=$('report');report.textContent='';report.hidden=true;ready=true;for(const id of ['full','play','loop'])$(id).disabled=false;updateUI(true);
+let previous=performance.now(),acc=0,frames=0,fpsAt=previous;
+function render(now){requestAnimationFrame(render);const dt=Math.min(.06,(now-previous)/1000);previous=now;
+ if(playing){time+=dt;if(locked>=0){if(time>=shots[locked].end)time=shots[locked].start}else if(time>=330){time=330;playing=false}}
+ time=clamp(time,0,330);sceneTime(time);updateCamera(time);
+ reflectView();renderer.render(scene,camera);updateUI();
+ frames++;if(now-fpsAt>3000){renderer.domElement.dataset.fps=String(Math.round(frames*1000/(now-fpsAt)));frames=0;fpsAt=now;}
+}
+requestAnimationFrame(render);
+}catch(err){console.error(err);const r=document.getElementById('report');r.hidden=false;r.textContent='三维场景未能启动。请确认网络可访问 jsDelivr CDN，并使用支持 WebGL 的现代浏览器。';}
+</script>
+</body>
+</html>

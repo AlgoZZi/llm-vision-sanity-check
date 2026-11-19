@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>滕王阁 · 江天长卷｜330 秒连续运镜</title>
+<style>
+:root{--ink:#e9e5d9;--muted:#adafa8;--gold:#d5ba7e;--panel:rgba(13,23,28,.91)}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#182831;color:var(--ink);font:12px/1.6 system-ui,"Microsoft YaHei",sans-serif}canvas#film{display:block;width:100%;height:100%}button,input,select{font:inherit}button{cursor:pointer;border:1px solid #ffffff25;background:#132329aa;color:var(--ink);border-radius:4px;padding:7px 12px;transition:background .2s,border-color .2s}button:hover{background:#334341;border-color:var(--gold)}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--gold);outline-offset:4px}button[aria-pressed="true"]{color:var(--gold);border-color:#d5ba7e88}button:disabled{opacity:.4;cursor:wait}.brand{position:fixed;left:30px;top:24px;pointer-events:none;text-shadow:0 2px 12px #0008}.brand h1{font:400 23px/1.3 "Songti SC","SimSun",serif;letter-spacing:7px;margin:0}.brand small{display:block;color:#e8e4d0a0;font-size:9px;letter-spacing:3px;margin-top:7px}.top-actions{position:fixed;right:26px;top:24px;display:flex;gap:8px}#menu{position:fixed;right:26px;top:73px;bottom:116px;width:min(367px,calc(100vw - 32px));background:var(--panel);border:1px solid #c8bb9635;border-radius:6px;backdrop-filter:blur(18px);box-shadow:0 12px 70px #0005;display:flex;flex-direction:column;z-index:4}#menu[hidden]{display:none}.menu-head{padding:16px 18px 12px;border-bottom:1px solid #ffffff15;display:flex;align-items:center;justify-content:space-between}.menu-head strong{font-size:13px;font-weight:500;letter-spacing:2px}.menu-head span{font:10px monospace;color:var(--gold)}.menu-scroll{overflow-y:auto;padding:8px;scrollbar-width:thin;scrollbar-color:#6d7566 transparent}.chapter{color:var(--gold);font-size:10px;letter-spacing:2px;padding:13px 9px 6px}.shot{width:100%;text-align:left;background:transparent;border:1px solid transparent;padding:10px 10px;display:block;margin:2px 0}.shot.active{border-color:#d5ba7e55;background:#d5ba7e0c}.shot-line{display:flex;gap:10px;align-items:center}.shot-no{font:11px monospace;color:var(--gold)}.shot-name{flex:1;font-size:12px}.shot-time{font:10px monospace;color:var(--muted)}.shot-desc{display:block;color:#b7beb7;font-size:10px;margin:4px 0 0 26px;line-height:1.7}.shot-meta{display:block;font-size:9px;color:#858f8d;margin:3px 0 0 26px}.menu-footer{padding:12px 16px;border-top:1px solid #ffffff15;color:#aeb8b1;font-size:10px}.menu-footer details{margin-top:7px}.menu-footer summary{cursor:pointer;color:var(--gold)}.checks{max-height:170px;overflow:auto;padding-top:6px}.checks div{margin:4px 0}.controls{position:fixed;bottom:22px;left:30px;right:30px;z-index:5}.controls-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.primary{border-color:#d5ba7e77;background:#203034d9;color:#ead7b0}#play{min-width:77px}.time{font:11px monospace;letter-spacing:1px;margin-left:8px;text-shadow:0 1px 8px #000}.right-meta{margin-left:auto;text-align:right;font:10px/1.8 monospace;text-shadow:0 2px 8px #000;color:#d5d9cd}#seek{width:100%;height:14px;margin:10px 0 1px;accent-color:var(--gold);cursor:pointer}#hint{font-size:10px;color:#ccd2c4a0;letter-spacing:.3px;text-shadow:0 1px 6px #000}.below{display:flex;justify-content:space-between;gap:12px}#shot-info{color:#e2d5b7;font-size:10px;text-shadow:0 1px 8px #000}select{background:#14272bdd;color:var(--muted);border:1px solid #ffffff25;border-radius:4px;padding:7px}.letterbox{position:fixed;left:0;right:0;height:clamp(12px,3.5vh,38px);background:#050b0e;pointer-events:none;z-index:1}.letterbox.top{top:0}.letterbox.bottom{bottom:0}.vignette{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,#06101838 100%);z-index:1}#loading{position:fixed;inset:0;z-index:10;display:grid;place-content:center;text-align:center;background:#10222c;transition:opacity .8s}#loading h2{font:400 31px "SimSun",serif;letter-spacing:12px;margin:0 0 15px}#loading p{color:#a7b2ad;font-size:11px;letter-spacing:1px;max-width:380px;padding:0 20px}#error{position:fixed;inset:20% 12%;z-index:15;background:#102129f5;border:1px solid #ac8864;padding:30px;display:none;overflow:auto}#error h2{font-weight:400}#error p{color:#c9c5b5;white-space:pre-wrap}.clean .brand,.clean .controls,.clean .top-actions{opacity:0;pointer-events:none}.clean #menu{display:none}.clean #restore{display:block}#restore{display:none;position:fixed;right:16px;bottom:14px;z-index:7;opacity:.5;font-size:10px}.clean #restore:hover{opacity:1}#toast{position:fixed;top:85px;left:30px;color:#ead7b0;font-size:11px;pointer-events:none;opacity:0;transition:opacity .3s;z-index:8} @media(max-width:650px){.brand{left:16px;top:20px}.brand h1{font-size:17px;letter-spacing:4px}.brand small{font-size:8px;letter-spacing:1px}.top-actions{right:14px;top:20px}.top-actions button{padding:6px 8px;font-size:10px}.controls{left:16px;right:16px;bottom:15px}.controls-row{gap:5px}.controls-row button{font-size:10px;padding:7px 8px}.time{font-size:10px;margin-left:2px}.right-meta{font-size:9px}#menu{right:14px;top:65px;bottom:145px}#hint{font-size:9px}#shot-info{display:none}select{font-size:10px;padding:7px 3px}}
+</style>
+</head>
+<body>
+<canvas id="film" aria-label="滕王阁三维连续短片"></canvas>
+<div class="letterbox top"></div><div class="letterbox bottom"></div><div class="vignette"></div>
+<header class="brand"><h1>滕王阁 · 江天长卷</h1><small>A RIVER / A PAVILION / AN EVENING</small></header>
+<div class="top-actions"><button id="clean" title="H 隐藏界面">净画面 H</button><button id="menu-toggle" aria-expanded="false" aria-controls="menu">分镜 27 ☰</button></div>
+<aside id="menu" hidden aria-label="27 镜分镜菜单">
+<div class="menu-head"><strong>分镜手记</strong><span>27 SHOTS · 05:30</span></div>
+<nav id="shot-list" class="menu-scroll" aria-label="点击分镜跳转"></nav>
+<div class="menu-footer">每条列出时间、景别、运镜、画面与人物。点选立即定位；顺播时分镜只是连续路径的段落标记。
+<details><summary>制作说明与验收状态</summary><div class="checks" id="checks"></div></details>
+</div></aside>
+<footer class="controls">
+<div class="controls-row"><button id="sequence" class="primary" disabled>按顺序播放</button><button id="play" disabled>▶ 播放</button><button id="prev" title="左方向键" disabled>←</button><button id="next" title="右方向键" disabled>→</button><button id="loop" aria-pressed="false" title="L 切换单镜循环" disabled>单镜循环</button><span class="time" id="time">00:00 / 05:30</span><span class="right-meta"><span id="current">01 / 27 · 0%</span><br><span id="clock">15:30</span> · <span id="fps">— fps</span> <select id="quality" title="画质与反射分辨率" aria-label="画质"><option value="auto">自适应</option><option value="high">精细</option><option value="low">流畅</option></select></span></div>
+<input id="seek" type="range" min="0" max="330" step="0.01" value="0" aria-label="全片播放进度">
+<div class="below"><span id="hint">空格 播放/暂停 · ← → 切镜 · L 循环 · M 分镜 · H 净画面</span><span id="shot-info">01 · 水中之阁｜倒影先于实体</span></div>
+</footer>
+<button id="restore">显示控件 H</button><div id="toast" role="status"></div>
+<div id="loading"><h2>江 天 长 卷</h2><p id="load-text">正在载入 Three.js 并生成楼阁、山水与实时反射。<br>首次打开需要联网；无需服务器或构建。</p></div>
+<div id="error" role="alert"><h2>画面暂未启动</h2><p id="error-text"></p><button onclick="location.reload()">重新载入</button></div>
+<script>
+'use strict';
+// All geometry, shaders, animation and storyboard live in this file.
+// Only the pinned Three.js engine is downloaded. No images, models, fonts or modules.
+const $=id=>document.getElementById(id);
+let failed=false;
+function fail(message){failed=true;$('loading').style.display='none';$('error').style.display='block';$('error-text').textContent=message;}
+window.addEventListener('error',e=>{if(e.message&&e.filename&&e.filename.indexOf('chrome-extension:')<0)fail('运行中出现错误：'+e.message+'\n可刷新重试。请使用支持 WebGL 的现代浏览器。');});
+function loadEngine(url,backup){const s=document.createElement('script');s.src=url;s.onload=()=>{try{main();}catch(e){fail(e.stack||e.message);}};s.onerror=()=>{s.remove();if(backup)loadEngine(backup,null);else fail('无法连接 Three.js CDN。请检查网络后重试。\n本文件不需要本地服务器，但首次加载引擎需要联网。');};document.head.appendChild(s);}
+loadEngine('https://cdnjs.cloudflare.com/ajax/libs/three.js/0.147.0/three.min.js','https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js');
+function main(){
+const T=THREE, TOTAL=330;
+const SHOTS=[
+[9,'水中之阁','特写','贴水前行、加速抬升','只看实时倒影；俯视角将实体隔在画框外。','无'],
+[8,'石阶 · 裙裾','近景','沿阶斜升','水纹退下，苔色石阶与一角淡青裙裾进入视野。','裙裾'],
+[7,'灯笼未明','特写','向左上方掠进','近看灯笼丝骨、流苏与朱柱，日光仍然明亮。','无'],
+[7,'瓦当承光','特写','贴檐升移','青瓦圆端与鎏金檐边擦过镜头。','无'],
+[7,'檐角望江','近景','沿檐转弯、下降','檐兽与翘角在前，江岸在后，连续落向回廊。','无'],
+[7,'柱间有风','中近景','沿廊向右横移','朱柱交替遮挡，视线落在肩后的廊道入口。','无'],
+[12,'越肩 · 登临','近景→远景','越过右肩、抬升向江','先见人物背影，飞越栏杆，把她留在身后。','越肩背影'],
+[14,'楼入江山','大远景','升空拉开、回望','连续回转视线，完整楼阁与岸线第一次建立关系。','无'],
+[14,'归向一窗','全景→中景','沿左弧收回上层','航线逐渐贴近楼身，从敞开的中央窗洞进入。','无'],
+[12,'窗含远水','中景','窗内缓移','深色窗棂框住江天；一位倚窗者只在画框侧缘。','窗内背影'],
+[12,'出窗见阁','中景→全景','沿窗退出、左移回望','窗框从近处掠过，视线连续转回重檐。','无'],
+[11,'云开千叠','全景','向左横摇、侧移','云层舒展，移动云影与日光斑扫过青瓦朱栏。','无'],
+[10,'落霞 · 孤鹜','长焦特写','收窄视角、锁定领鸟跟拍','目光追随真实飞行轨迹，双翼起伏，远处楼身被压缩。','无'],
+[10,'秋水 · 长天','特写→极远景','加速后拉、展开视角','跟鸟的视线渐归江天；鸟、楼与地平线汇入一色。','无'],
+[14,'晚照渐退','大远景','减速后移','承接拉出惯性，日色由金向青蓝过渡。','无'],
+[14,'江岸渐远','大远景','缓慢左移后退','岸线成为长弧，楼阁在水陆之间缩小。','无'],
+[14,'渔舟唱晚','大远景','沿江缓移','小舟在宽阔水面行进，楼上的灯火渐起。','无'],
+[14,'山色入蓝','极远景','缓慢升高拉远','层层山影和距离雾衔接蓝调，不再出现急速动作。','无'],
+[12,'楼成一点','极远景','继续后退','建筑退成远岸的小点，把空旷留给水天。','无'],
+[12,'回望归途','极远景','宽弧转向、缓收距离','在蓝色江面上转回楼阁方向，为回到人铺路。','无'],
+[14,'归向高台','远景→近景','连续推进、落向露台','从远处回到高层开放廊台，人的背影重新进入画面。','露台背影'],
+[14,'凭栏不语','近景','肩后细微横移','人物对着最后的余霞，衣袖被江风轻轻带动。','露台背影'],
+[16,'人小江天阔','近景→全景','越出露台、斜向拉开','再次离开人物，栏杆与檐角近距离掠过。','露台背影'],
+[18,'回环一百三十度','全景','130°连续环绕、拉远','同一镜完成超过120°环绕，余霞退向夜色。','远处背影'],
+[18,'阁在画外侧','大远景','沿环绕惯性后拉、偏移构图','灯火落在画面左侧，水与夜空逐渐占据主体。','无'],
+[14,'唯余江流','极远景','缓慢后移','构图保持，镜头仍有低速漂移；河面反射继续流动。','无'],
+[16,'空自流','极远景','极缓漂移、构图停留','不加字幕，不冻结水流；用16秒的余韵走到21:00。','无']
+].map((a,i)=>({id:i+1,duration:a[0],name:a[1],size:a[2],move:a[3],detail:a[4],person:a[5]}));
+let sum=0;SHOTS.forEach(s=>{s.start=sum;sum+=s.duration;s.end=sum;});
+if(sum!==TOTAL||SHOTS.length!==27)throw new Error('分镜时间校验失败');
+const mm=t=>String(Math.floor(t/60)).padStart(2,'0')+':'+String(Math.floor(t%60)).padStart(2,'0');
+const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const smooth=(a,b,x)=>{x=clamp((x-a)/(b-a));return x*x*(3-2*x);};
+const mix=(a,b,t)=>a+(b-a)*t;
+let seed=71823;function rnd(){seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;}
+const renderer=new T.WebGLRenderer({canvas:$('film'),antialias:true,powerPreference:'high-performance',alpha:false});
+renderer.outputEncoding=T.sRGBEncoding;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=.95;
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.shadowMap.autoUpdate=false;
+renderer.setClearColor(0x7899a2);renderer.info.autoReset=false;
+const scene=new T.Scene();scene.fog=new T.FogExp2(0x9bafb2,.00072);
+const camera=new T.PerspectiveCamera(43,innerWidth/innerHeight,.08,14000);
+const hemi=new T.HemisphereLight(0xd1e3e6,0x474b3e,1.05);scene.add(hemi);
+const sun=new T.DirectionalLight(0xffdfaa,2.2);sun.position.set(-95,130,90);scene.add(sun);
+sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-85,right:85,top:85,bottom:-85,near:1,far:480});sun.shadow.bias=-.00025;sun.shadow.normalBias=.06;sun.shadow.radius=2;
+const fill=new T.DirectionalLight(0x86aebc,.3);fill.position.set(50,60,-90);scene.add(fill);
+// Repeated architectural elements are batched as instances, not thousands of draw calls.
+const batches=new Map(), temp=new T.Object3D();
+const stone=new T.MeshStandardMaterial({color:0xa5a89b,roughness:.94});
+const stoneDark=new T.MeshStandardMaterial({color:0x687c74,roughness:1});
+const wood=new T.MeshStandardMaterial({color:0x742e24,roughness:.78});
+const red=new T.MeshStandardMaterial({color:0x9f3a2a,roughness:.72});
+const gold=new T.MeshStandardMaterial({color:0xc3a05c,metalness:.46,roughness:.44});
+const teal=new T.MeshStandardMaterial({color:0x244f4f,metalness:.15,roughness:.63});
+const pale=new T.MeshStandardMaterial({color:0xc9c3a8,roughness:.9});
+const dark=new T.MeshStandardMaterial({color:0x192d2d,roughness:.92});
+const glow=new T.MeshStandardMaterial({color:0xb56832,emissive:0xffa34b,emissiveIntensity:.08,roughness:.8});
+const lanternMat=new T.MeshStandardMaterial({color:0xd28557,emissive:0xff923b,emissiveIntensity:.08,roughness:.9});
+const boxGeo=new T.BoxGeometry(1,1,1), cylGeo=new T.CylinderGeometry(1,1,1,12), sphereGeo=new T.SphereGeometry(1,12,8);
+function instance(geo,mat,x,y,z,sx,sy,sz,rx=0,ry=0,rz=0){const key=geo.uuid+mat.uuid;let b=batches.get(key);if(!b){b={geo,mat,items:[]};batches.set(key,b);}temp.position.set(x,y,z);temp.rotation.set(rx,ry,rz);temp.scale.set(sx,sy,sz);temp.updateMatrix();b.items.push(temp.matrix.clone());}
+function box(mat,x,y,z,sx,sy,sz,ry=0){instance(boxGeo,mat,x,y,z,sx,sy,sz,0,ry);}
+function beam(mat,a,b,r=.07){const av=new T.Vector3(...a),bv=new T.Vector3(...b),d=bv.clone().sub(av);temp.position.copy(av).add(bv).multiplyScalar(.5);temp.quaternion.setFromUnitVectors(new T.Vector3(0,1,0),d.clone().normalize());temp.scale.set(r,d.length(),r);temp.updateMatrix();const key=cylGeo.uuid+mat.uuid;if(!batches.has(key))batches.set(key,{geo:cylGeo,mat,items:[]});batches.get(key).items.push(temp.matrix.clone());}
+function mesh(geo,mat,x=0,y=0,z=0){const m=new T.Mesh(geo,mat);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;scene.add(m);return m;}
+// All surface detail is generated in memory; no downloaded textures or models.
+function texture(w,h,paint,repeatX=1,repeatY=1){const c=document.createElement('canvas');c.width=w;c.height=h;paint(c.getContext('2d'),w,h);const t=new T.CanvasTexture(c);t.encoding=T.sRGBEncoding;t.wrapS=t.wrapT=T.RepeatWrapping;t.repeat.set(repeatX,repeatY);t.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());return t;}
+const masonry=texture(512,512,(c,w,h)=>{c.fillStyle='#afa99a';c.fillRect(0,0,w,h);for(let row=0;row<16;row++)for(let col=-1;col<9;col++){const x=col*64+(row%2)*32,y=row*32;c.fillStyle=`hsl(42,8%,${55+rnd()*12}%)`;c.fillRect(x+1,y+1,62,30);c.fillStyle='#eee7d015';c.fillRect(x+2,y+2,60,1);}for(let i=0;i<17000;i++){c.fillStyle=rnd()>.5?'#e8dcc014':'#172e2620';c.fillRect(rnd()*w,rnd()*h,1+rnd()*2,1);}},3,2);
+stone.map=masonry;stone.color.setHex(0xc3c0ae);stoneDark.map=masonry;stoneDark.color.setHex(0x6d8174);
+wood.color.setHex(0x49271f);red.color.setHex(0x85382c);gold.color.setHex(0xaa8953);gold.metalness=.25;gold.roughness=.65;teal.color.setHex(0x354d48);teal.metalness=.08;pale.color.setHex(0xbfb9a5);
+const tileTexture=texture(512,512,(c,w,h)=>{c.fillStyle='#99a49c';c.fillRect(0,0,w,h);for(let j=0;j<16;j++)for(let i=0;i<20;i++){let x=i*25.6,y=j*32;const g=c.createLinearGradient(x,0,x+25.6,0);g.addColorStop(0,'#3e514c');g.addColorStop(.48,'#a4aaa0');g.addColorStop(.7,'#8b968c');g.addColorStop(1,'#435650');c.fillStyle=g;c.fillRect(x,y,25,31);c.fillStyle='#d7cfaf44';c.fillRect(x+2,y+1,20,1);}for(let i=0;i<9000;i++){c.fillStyle='#102b2314';c.fillRect(rnd()*w,rnd()*h,2,2);}});
+const roofMaterial=new T.MeshStandardMaterial({map:tileTexture,color:0x69877b,roughness:.84,side:T.DoubleSide});
+const soffit=new T.MeshStandardMaterial({color:0x342b23,roughness:.92,side:T.DoubleSide});
+const decorative=new T.MeshStandardMaterial({color:0x507974,roughness:.85});
+// Curved landform, not a rectangular slab sticking out into the river.
+function bankZ(x){return 14+14*Math.exp(-x*x/4800)+9*Math.sin(x*.008);}
+const landGeo=new T.PlaneGeometry(2300,1400,100,48);landGeo.rotateX(-Math.PI/2);const lp=landGeo.attributes.position;
+for(let i=0;i<lp.count;i++){const x=lp.getX(i),v=(lp.getZ(i)+700)/1400,z=bankZ(x)-v*1400;lp.setZ(i,z);lp.setY(i,v<.035?mix(-.4,1.25,v/.035):1.25+Math.sin(x*.012)*Math.sin(v*8)*.65);}landGeo.computeVertexNormals();
+mesh(landGeo,new T.MeshStandardMaterial({color:0x46574a,roughness:1}));
+// Revetment follows that shore, each stone catches its own light.
+for(let i=-190;i<190;i++){const x=i*5.5,z=bankZ(x);box(stoneDark,x,.2,z,5.6,1.8,1.6);box(stone,x,1.1,z-.7,5.6,.24,2.4);}
+
+box(stone,0,.36,20,55,.7,8);
+box(stoneDark,0,1.25,16,68,2.5,26);
+box(stone,0,2.8,0,49,1,37);
+box(pale,0,3.45,0,45,.3,34);
+box(stone,0,3.8,0,37,.5,28);
+for(let i=0;i<15;i++){const y=.22+i*.225,z=31.2-i*.91;box(i%3===0?stoneDark:stone,0,y,z,17,.45,.99);}
+for(const x of [-9.1,9.1]){beam(pale,[x,.9,31.5],[x,4.1,18],.19);for(let i=0;i<8;i++){const z=31-i*1.72,y=1.1+i*.39;box(pale,x,y-.3,z,.3,1.15,.3);instance(sphereGeo,pale,x,y+.33,z,.24,.24,.24);}}
+function rail(x1,z1,x2,z2,y){let d=Math.hypot(x2-x1,z2-z1),n=Math.ceil(d/1.35);for(let i=0;i<=n;i++){const q=i/n,x=mix(x1,x2,q),z=mix(z1,z2,q);box(pale,x,y+.57,z,.14,1.14,.14);box(gold,x,y+1.14,z,.22,.08,.22);}beam(pale,[x1,y+1.12,z1],[x2,y+1.12,z2],.065);beam(wood,[x1,y+.35,z1],[x2,y+.35,z2],.045);}
+// Hip roofs have a horizontal ridge, four sloping faces, concave eaves and
+// lifted corners. The earlier pyramid-shaped surfaces have been removed.
+function tube(points,r,mat,segments=24){mesh(new T.TubeGeometry(new T.CatmullRomCurve3(points.map(p=>new T.Vector3(...p))),segments,r,5,false),mat);}
+function roof(cx,cy,cz,w,d,h){
+ const ridge=w*.42;
+ function surf(u,v){const edge=Math.max(Math.abs(v),(Math.abs(u)*w-ridge)/(w-ridge));const q=clamp(edge);return cy+h*Math.pow(1-q,1.45)+.22*q*q+.8*Math.pow(Math.abs(u*v),5);}
+ const p=[],uv=[],ix=[],nx=60,nz=40;
+ for(let j=0;j<=nz;j++)for(let i=0;i<=nx;i++){const u=i/nx*2-1,v=j/nz*2-1;p.push(cx+u*w,surf(u,v),cz+v*d);uv.push(i/nx*w/7,j/nz*d/5);}
+ for(let j=0;j<nz;j++)for(let i=0;i<nx;i++){const a=j*(nx+1)+i;ix.push(a,a+nx+1,a+1,a+1,a+nx+1,a+nx+2);}
+ const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(p,3));g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));g.setIndex(ix);g.computeVertexNormals();mesh(g,roofMaterial);
+ const under=g.clone();const up=under.attributes.position;for(let i=0;i<up.count;i++)up.setY(i,up.getY(i)-.2);up.needsUpdate=true;mesh(under,soffit);
+ for(const side of [-1,1]){
+  const pts=[];for(let i=0;i<=32;i++){const u=i/16-1;pts.push([cx+u*w,surf(u,side)-.05,cz+side*d]);}tube(pts,.11,wood,32);tube(pts.map(p=>[p[0],p[1]+.11,p[2]]),.035,gold,32);
+  for(let x=-w+.12;x<w;x+=.31){const u=x/w,y=surf(u,side);instance(cylGeo,teal,cx+x,y-.035,cz+side*d,.09,.12,.09,Math.PI/2);instance(cylGeo,gold,cx+x,y-.04,cz+side*d+side*.065,.032,.015,.032,Math.PI/2);}
+ }
+ for(const sx of [-1,1])for(const sz of [-1,1]){
+  const pts=[];for(let j=0;j<=24;j++){const q=j/24,x=mix(sx*ridge,sx*w,q),z=sz*d*q;pts.push([cx+x,surf(x/w,z/d)+.11,cz+z]);}tube(pts,.105,teal);tube(pts.map(p=>[p[0],p[1]+.08,p[2]]),.03,gold);
+  // Ridge-end beasts: body, muzzle, upturned tail; no floating gold balls.
+  for(let j=0;j<3;j++){const q=.82+j*.065,x=mix(sx*ridge,sx*w,q),z=sz*d*q,y=surf(x/w,z/d)+.27;instance(sphereGeo,teal,cx+x,y,cz+z,.12,.16,.22,0,-sx*sz*.7);instance(sphereGeo,teal,cx+x+sx*.09,y+.16,cz+z+sz*.09,.08,.11,.1);beam(teal,[cx+x-sx*.14,y,cz+z-sz*.14],[cx+x-sx*.24,y+.22,cz+z-sz*.2],.045);}
+ }
+ tube([[cx-ridge-.4,cy+h+.15,cz],[cx,cy+h+.13,cz],[cx+ridge+.4,cy+h+.15,cz]],.14,teal);
+ for(const side of [-1,1]){const x=cx+side*ridge;tube([[x,cy+h+.15,cz],[x+side*.3,cy+h+.6,cz],[x+side*.23,cy+h+1.1,cz],[x-side*.18,cy+h+1.3,cz]],.16,teal);}
+}
+function bracket(x,y,z,rotation=0){
+ for(let n=0;n<3;n++){const spread=.35+n*.23;box(n%2?gold:decorative,x,y+n*.19,z,.25,.16,spread*2,rotation);box(decorative,x,y+.13+n*.19,z,spread*2,.12,.23,rotation);}
+}
+function lattice(x,y,z,w,h,side=1){
+ box(dark,x,y,z,w+.14,h+.14,.18);box(glow,x,y,z+side*.11,w-.11,h-.11,.035);
+ for(let i=0;i<=6;i++)box(wood,x-w/2+i*w/6,y,z+side*.16,.045,h,.06);
+ for(let j=0;j<=4;j++)box(wood,x,y-h/2+j*h/4,z+side*.17,w,.045,.06);
+ for(const sx of [-1,1])box(red,x+sx*(w/2+.06),y,z+side*.15,.12,h+.35,.15);
+ box(red,x,y+h/2+.1,z+side*.15,w+.35,.13,.17);box(red,x,y-h/2-.1,z+side*.15,w+.35,.13,.17);
+}
+const widths=[14,13.7,12.6,12.3,11.2,10.9],depths=[10,9.8,9,8.7,8,7.8];
+for(let k=0;k<6;k++){
+ const y=4+k*6,w=widths[k],d=depths[k],major=k%2===1;
+ box(wood,0,y,0,w*2+2,.42,d*2+2.1);box(red,0,y+.23,0,w*2+1.8,.12,d*2+1.9);
+ // An actual enclosed inner hall gives visual weight and deep gallery shadows.
+ box(wood,0,y+2,-d+1.7,w*2-3.5,3.7,.35);
+ for(const side of [-1,1]){
+  box(wood,side*(w-1.6),y+2,0,.3,3.8,d*2-3.1);
+  for(let i=-3;i<=3;i++){
+   const x=i*w/3;
+   instance(cylGeo,red,x,y+2,side*d,.26,3.9,.26);instance(cylGeo,stone,x,y+.37,side*d,.31,.25,.31);
+   bracket(x,y+3.51,side*d);
+  }
+  box(red,0,y+3.45,side*d,w*2,.31,.38);box(decorative,0,y+3.15,side*d,w*2,.26,.2);
+  for(let i=-10;i<=10;i++){const x=i*w/10;box(gold,x,y+3.15,side*d+side*.12,.36,.045,.035);}
+  // Central aperture stays open on the camera's third-floor route.
+  for(let i=-2;i<=2;i++){if(i===0)continue;const x=i*w*.34;lattice(x,y+1.92,side*(d-1.7),w*.27,major?2.6:2.1,side);}
+  if(k!==3&&k!==4){box(wood,0,y+1.8,side*(d-1.7),w*.25,3.1,.15);lattice(0,y+1.8,side*(d-1.6),w*.2,2.8,side);}
+ }
+ // Paired eave widths alternate gently, rather than forming a six-step pyramid.
+ if(k>0){rail(-w-.65,d+.65,w+.65,d+.65,y+.27);rail(-w-.65,-d-.65,-w-.65,d+.65,y+.27);rail(w+.65,-d-.65,w+.65,d+.65,y+.27);rail(-w-.65,-d-.65,w+.65,-d-.65,y+.27);}
+ for(const sx of [-1,1])for(let j=-2;j<=2;j++){const z=j*d/2;instance(cylGeo,red,sx*w,y+2,z,.24,3.9,.24);bracket(sx*w,y+3.5,z,Math.PI/2);}
+ if(k===3){for(const x of [-2.9,2.9])box(red,x,y+1.94,d-1.7,.2,3.6,.2);box(wood,0,y+3.65,d-1.7,6,.2,.3);}
+ roof(0,y+3.9,0,w+(major?2.9:2.2),d+2.15,major?2.55:1.9);
+}
+// Stone podium courses and carved balustrades ground the tower in its site.
+for(let i=0;i<4;i++){const w=25-i*.7,d=19-i*.5;box(i%2?stoneDark:stone,0,.65+i*.72,0,w*2,.65,d*2);}
+for(const side of [-1,1]){rail(side*10,18,side*25,18,3.4);rail(side*25,-18,side*25,18,3.4);}
+box(wood,0,28.12,10.35,16,.25,5.5);rail(-8,13.1,8,13.1,28.25);
+// Lower symmetrical wings and open connecting galleries; main tower remains dominant.
+for(const side of [-1,1]){
+ const x=side*31;box(stone,x,2.4,0,19,2.6,22);box(wood,x,3.9,0,16,.4,18);
+ for(const sx of [-1,1])for(const sz of [-1,1]){instance(cylGeo,red,x+sx*6.2,6.05,sz*7.2,.24,4.1,.24);bracket(x+sx*6.2,7.5,sz*7.2);}
+ for(let j=-1;j<=1;j++)lattice(x+j*3.8,5.9,5.8,2.8,2.6);
+ roof(x,7.9,0,10.2,10.5,2.8);box(wood,x,9.3,0,10,1.2,9);roof(x,10,0,7.4,7.1,2.7);
+ for(let j=0;j<5;j++){const xx=side*(19+j*1.5);instance(cylGeo,red,xx,5.8,6.1,.16,4,.16);instance(cylGeo,red,xx,5.8,-3.1,.16,4,.16);}
+ roof(side*22,7.8,1.5,7.5,5.9,1.6);
+}
+// Plaque is generated locally; it is an architectural object, not a film subtitle.
+const plaqueCanvas=document.createElement('canvas');plaqueCanvas.width=768;plaqueCanvas.height=240;const pc=plaqueCanvas.getContext('2d');pc.fillStyle='#162d2b';pc.fillRect(0,0,768,240);pc.strokeStyle='#bb9859';pc.lineWidth=12;pc.strokeRect(13,13,742,214);pc.fillStyle='#dab971';pc.font='bold 148px SimSun,serif';pc.textAlign='center';pc.textBaseline='middle';pc.fillText('滕 王 阁',384,130);const plaqueTexture=new T.CanvasTexture(plaqueCanvas);plaqueTexture.encoding=T.sRGBEncoding;mesh(new T.PlaneGeometry(7.5,2.35),new T.MeshStandardMaterial({map:plaqueTexture,roughness:.9}),0,7,10.22);
+// Lanterns with slatted frames and tassels.
+for(let k=0;k<5;k++)for(const x of [-10.3,10.3]){const y=6.8+k*6,z=10-k*.65;instance(sphereGeo,lanternMat,x,y,z,.43,.65,.43);instance(cylGeo,gold,x,y+.65,z,.25,.12,.25);instance(cylGeo,gold,x,y-.65,z,.25,.12,.25);beam(gold,[x,y+.65,z],[x,y+1.2,z],.025);beam(gold,[x,y-.65,z],[x,y-1.22,z],.025);for(let j=0;j<8;j++){const a=j/8*Math.PI*2;beam(gold,[x+Math.cos(a)*.39,y-.42,z+Math.sin(a)*.39],[x+Math.cos(a)*.39,y+.42,z+Math.sin(a)*.39],.013);}}
+// Wind-shaped broadleaf and pine canopies, not repeated conical Christmas trees.
+const leaves=new T.MeshStandardMaterial({color:0x344a37,roughness:1});
+const lightLeaves=new T.MeshStandardMaterial({color:0x4d5a3b,roughness:1});
+const crownGeo=new T.IcosahedronGeometry(1,1),rockGeo=new T.IcosahedronGeometry(1,1);
+for(let i=0;i<420;i++){
+ const x=(rnd()-.5)*1250,z=bankZ(x)-18-rnd()*660;if(Math.abs(x)<52&&z>-38)continue;
+ const h=3+rnd()*9,lean=(rnd()-.5)*h*.28;
+ beam(wood,[x,.8,z],[x+lean,h*.76,z+.6],.12+h*.012);
+ const pine=rnd()>.45;
+ for(let j=0;j<5;j++){
+  const a=j*2.4+rnd(),r=h*(.13+rnd()*.12),xx=x+lean+Math.cos(a)*r,zz=z+Math.sin(a)*r,yy=h*(.52+j*.09);
+  beam(wood,[x+lean*.7,yy-.5,z],[xx,yy,zz],.06);
+  instance(crownGeo,j%2?leaves:lightLeaves,xx,yy,zz,h*(.21+rnd()*.1),h*(pine?.095:.2),h*(.18+rnd()*.12),rnd()*.3,rnd()*6);
+ }
+}
+// Shore stones, shrubs and tall reeds give parallax at the river's edge.
+for(let i=0;i<350;i++){
+ const x=(rnd()-.5)*850;if(Math.abs(x)<14)continue;const z=bankZ(x)+rnd()*1.4;
+ instance(rockGeo,stoneDark,x,-.02+rnd()*.3,z,.5+rnd()*1.7,.3+rnd()*.6,.5+rnd(),rnd(),rnd()*6,rnd());
+ if(i%3===0)for(let j=0;j<4;j++){const xx=x+rnd()*1.4,h=.4+rnd()*1.3;beam(leaves,[xx,.1,z-1],[xx+.2,h,z-.7],.018);}
+ if(i%2===0)instance(crownGeo,leaves,x,1.4,z-4,1.2,.8,1.3,0,rnd()*6);
+}
+// Fully three-dimensional ridges: front slopes, peaks and valleys, with aerial perspective.
+for(let layer=0;layer<5;layer++){
+ const g=new T.PlaneGeometry(5800,680,140,24);g.rotateX(-Math.PI/2);const p=g.attributes.position;
+ for(let i=0;i<p.count;i++){
+  const x=p.getX(i),z=p.getZ(i),v=(z+340)/680;
+  let ridge=105+layer*30+Math.sin(x*.0031+layer)*55+Math.sin(x*.0083+layer*1.7)*32+Math.sin(x*.019+layer)*11;
+  const profile=Math.pow(Math.sin(Math.PI*v),1.45),rough=Math.sin(x*.037+z*.03)*Math.sin(z*.041)*6;
+  p.setY(i,Math.max(-2,profile*ridge+rough*profile));p.setZ(i,z-650-layer*480);
+ }
+ g.computeVertexNormals();mesh(g,new T.MeshStandardMaterial({color:new T.Color().setHSL(.47-layer*.008,.085,.24+layer*.042),roughness:1}));
+}
+// Batch the curved tile ribs too: merge transforms-free BufferGeometry by material.
+// This avoids one draw call per tile and keeps both main and reflection passes light.
+const mergeGroups=new Map();
+scene.children.slice().forEach(o=>{if(o.isMesh&&o.geometry.type==='TubeGeometry'){const k=o.material.uuid;if(!mergeGroups.has(k))mergeGroups.set(k,{mat:o.material,geos:[]});o.updateMatrix();const g=o.geometry.clone().applyMatrix4(o.matrix);mergeGroups.get(k).geos.push(g);scene.remove(o);o.geometry.dispose();}});
+for(const {mat,geos} of mergeGroups.values()){let pp=[],nn=[],ii=[],offset=0;for(const g of geos){const a=g.attributes.position.array,b=g.attributes.normal.array;for(let j=0;j<a.length;j++)pp.push(a[j]);for(let j=0;j<b.length;j++)nn.push(b[j]);for(let j=0;j<g.index.count;j++)ii.push(g.index.array[j]+offset);offset+=g.attributes.position.count;g.dispose();}const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute(pp,3));g.setAttribute('normal',new T.Float32BufferAttribute(nn,3));g.setIndex(ii);mesh(g,mat);}
+for(const b of batches.values()){const im=new T.InstancedMesh(b.geo,b.mat,b.items.length);b.items.forEach((m,i)=>im.setMatrixAt(i,m));im.instanceMatrix.needsUpdate=true;im.castShadow=true;im.receiveShadow=true;im.computeBoundingSphere&&im.computeBoundingSphere();scene.add(im);}
+batches.clear();
+// Animated moving cloud shadows on the architecture, using actual world coordinates.
+for(const m of [stone,wood,red,gold,teal,pale,stoneDark]){
+ m.onBeforeCompile=shader=>{shader.uniforms.filmTime={value:0};shader.vertexShader='varying vec3 vCloudPosition;\n'+shader.vertexShader;shader.vertexShader=shader.vertexShader.replace('#include <project_vertex>','#include <project_vertex>\n vec4 cp = vec4(transformed,1.0);\n #ifdef USE_INSTANCING\n cp = instanceMatrix * cp;\n #endif\n vCloudPosition = (modelMatrix * cp).xyz;');shader.fragmentShader='uniform float filmTime; varying vec3 vCloudPosition;\n'+shader.fragmentShader;shader.fragmentShader=shader.fragmentShader.replace('#include <output_fragment>','float cloudShadow = 0.86 + 0.14 * smoothstep(-0.6,0.5,sin(vCloudPosition.x*0.075 + vCloudPosition.z*0.06 - filmTime*0.035));\n outgoingLight *= cloudShadow;\n #include <output_fragment>');m.userData.shader=shader;};
+}
+// Layered sky: stretched cloud strata, sun-facing warm rims, low horizon haze.
+const skyUniforms={uTime:{value:0},uTop:{value:new T.Color()},uHorizon:{value:new T.Color()},uSun:{value:new T.Vector3()},uDay:{value:1},uNight:{value:0},uDusk:{value:0}};
+const skyMat=new T.ShaderMaterial({side:T.BackSide,depthWrite:false,fog:false,uniforms:skyUniforms,vertexShader:`varying vec3 vDir;void main(){vDir=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,fragmentShader:`
+ varying vec3 vDir;uniform float uTime,uDay,uNight,uDusk;uniform vec3 uTop,uHorizon,uSun;
+ float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+ float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
+ float fbm(vec2 p){float n=0.,a=.5;for(int i=0;i<5;i++){n+=a*noise(p);p=p*2.03+vec2(19.1,7.7);a*=.5;}return n;}
+ void main(){
+  vec3 d=normalize(vDir);float h=max(d.y,0.);float sd=dot(d,normalize(uSun));
+  vec3 c=mix(uHorizon,uTop,pow(smoothstep(-.08,.85,d.y),.48));
+  float disk=smoothstep(.99986,.99992,sd),halo=pow(max(sd,0.),14.);
+  c+=vec3(1.,.53,.2)*(disk*3.5*uDay+halo*(.10*uDay+.17*uDusk));
+  float band=exp(-pow((d.y-.035)*12.,2.));c+=vec3(.22,.072,.035)*band*uDusk*(.3+.7*pow(max(sd,0.),3.));
+  vec2 p=d.xz/(h+.19)*vec2(1.25,3.8)+vec2(uTime*.003,0.);
+  float n=fbm(p),fine=fbm(p*3.1+vec2(5.,uTime*.001));
+  float clouds=smoothstep(.42,.69,n*.8+fine*.2)*smoothstep(.015,.14,d.y)*(1.-smoothstep(.62,.9,d.y));
+  float rim=pow(clamp(1.-abs(n-.53)*14.,0.,1.),2.)*pow(max(sd,0.),2.);
+  vec3 cloudColor=mix(vec3(.065,.09,.14),vec3(.61,.65,.65),uDay);
+  cloudColor=mix(cloudColor,vec3(.58,.32,.20),uDusk*.65);cloudColor+=vec3(.45,.25,.1)*rim*uDusk;
+  c=mix(c,cloudColor,clouds*.72);
+  vec2 starGrid=d.xz/(h+.25)*750.;vec2 cell=floor(starGrid),f=fract(starGrid)-.5;
+  float star=step(.9982,hash(cell))*exp(-dot(f,f)*60.)*smoothstep(.1,.5,d.y)*uNight;
+  c+=vec3(.6,.7,.9)*star*.8;
+  gl_FragColor=vec4(c,1.);
+  #include <tonemapping_fragment>
+  #include <encodings_fragment>
+ }`});
+const sky=mesh(new T.SphereGeometry(6500,40,24),skyMat);sky.renderOrder=-10;sky.castShadow=false;sky.receiveShadow=false;
+// Real planar reflection: a mirrored camera renders the current scene every frame.
+// The oblique clip plane rejects all geometry below the water plane.
+let reflectionSize=768;
+const reflectionTarget=new T.WebGLRenderTarget(reflectionSize,reflectionSize,{minFilter:T.LinearFilter,magFilter:T.LinearFilter,depthBuffer:true,stencilBuffer:false});
+reflectionTarget.texture.generateMipmaps=false;
+const reflectedCamera=new T.PerspectiveCamera();const textureMatrix=new T.Matrix4(),biasMatrix=new T.Matrix4().set(.5,0,0,.5,0,.5,0,.5,0,0,.5,.5,0,0,0,1);
+const waterUniforms={uReflection:{value:reflectionTarget.texture},uMatrix:{value:textureMatrix},uTime:{value:0},uTint:{value:new T.Color(0x507f82)},uSun:{value:new T.Vector3()},uDay:{value:1},uFog:{value:scene.fog.color},uDensity:{value:.00072}};
+const waterMat=new T.ShaderMaterial({uniforms:waterUniforms,side:T.FrontSide,vertexShader:`uniform mat4 uMatrix; varying vec4 vReflect; varying vec3 vWorld; varying float vDistance; void main(){vec4 w=modelMatrix*vec4(position,1.);vWorld=w.xyz;vReflect=uMatrix*w;vec4 mv=modelViewMatrix*vec4(position,1.);vDistance=length(mv.xyz);gl_Position=projectionMatrix*mv;}`,fragmentShader:`
+ uniform sampler2D uReflection;uniform float uTime,uDay,uDensity;uniform vec3 uTint,uSun,uFog;varying vec4 vReflect;varying vec3 vWorld;varying float vDistance;
+ void main(){
+ vec2 p=vWorld.xz;float a=p.x*.73+p.y*.32-uTime*.61,b=-p.x*.38+p.y*1.13+uTime*.47;
+ float micro=sin(p.x*3.1+p.y*4.7-uTime*1.8)*.15+sin(p.x*7.3-p.y*3.6+uTime*1.3)*.06;
+ vec2 ripple=vec2(sin(a)+.43*sin(b)+micro,cos(b)+.35*cos(a*1.7)+micro);
+ vec2 uv=vReflect.xy/vReflect.w;float attenuation=1./(1.+vDistance*.0025);uv+=ripple*vec2(.0011,.0022)*attenuation;
+ vec3 reflection=texture2D(uReflection,clamp(uv,.001,.999)).rgb;
+ vec3 viewDir=normalize(cameraPosition-vWorld);float fresnel=.18+.78*pow(1.-max(viewDir.y,0.),3.);
+ vec3 n=normalize(vec3(-ripple.x*.045,1.,-ripple.y*.06));
+ float sunGlint=pow(max(dot(reflect(-normalize(uSun),n),viewDir),0.),160.);
+ vec3 col=mix(uTint*vec3(.18,.29,.30),reflection,.55+fresnel*.38)+vec3(1.,.65,.32)*sunGlint*.85*uDay;
+ float foam=pow(.5+.5*sin(p.y*1.9+sin(p.x*.34)+uTime*.4),24.)*.013*attenuation;
+ col+=vec3(.65,.8,.8)*foam*uDay;float fog=1.-exp(-uDensity*uDensity*vDistance*vDistance);col=mix(col,uFog,fog*.8);gl_FragColor=vec4(col,1.);
+ #include <tonemapping_fragment>
+ #include <encodings_fragment>
+ }`});
+const water=mesh(new T.PlaneGeometry(12500,12500),waterMat);water.rotation.x=-Math.PI/2;water.position.y=.035;water.castShadow=false;water.receiveShadow=false;
+const waterPlane=new T.Plane(new T.Vector3(0,1,0),-.035),clip=new T.Vector4(),q=new T.Vector4(),dir=new T.Vector3(),up=new T.Vector3(),look=new T.Vector3();
+function reflectScene(){
+ camera.updateMatrixWorld();camera.getWorldDirection(dir);reflectedCamera.position.copy(camera.position);reflectedCamera.position.y=.07-camera.position.y;
+ look.copy(reflectedCamera.position).add(new T.Vector3(dir.x,-dir.y,dir.z));up.set(0,1,0).applyQuaternion(camera.quaternion);up.y=-up.y;up.negate();reflectedCamera.up.copy(up);reflectedCamera.lookAt(look);reflectedCamera.near=camera.near;reflectedCamera.far=camera.far;reflectedCamera.projectionMatrix.copy(camera.projectionMatrix);reflectedCamera.updateMatrixWorld();reflectedCamera.matrixWorldInverse.copy(reflectedCamera.matrixWorld).invert();
+ textureMatrix.copy(biasMatrix).multiply(reflectedCamera.projectionMatrix).multiply(reflectedCamera.matrixWorldInverse);
+ const plane=waterPlane.clone().applyMatrix4(reflectedCamera.matrixWorldInverse);clip.set(plane.normal.x,plane.normal.y,plane.normal.z,plane.constant);
+ const pr=reflectedCamera.projectionMatrix.elements;q.x=(Math.sign(clip.x)+pr[8])/pr[0];q.y=(Math.sign(clip.y)+pr[9])/pr[5];q.z=-1;q.w=(1+pr[10])/pr[14];clip.multiplyScalar(2/clip.dot(q));pr[2]=clip.x;pr[6]=clip.y;pr[10]=clip.z+1-.0004;pr[14]=clip.w;
+ water.visible=false;renderer.setRenderTarget(reflectionTarget);renderer.clear();renderer.render(scene,reflectedCamera);renderer.setRenderTarget(null);water.visible=true;
+}
+// Stylised, genuinely three-dimensional figures: bun, crossed collar, sleeves and pleated skirt.
+const actors=[];
+function person(x,y,z,scale=1){
+ const root=new T.Group();root.position.set(x,y,z);root.scale.setScalar(scale);scene.add(root);
+ const cloth=new T.MeshStandardMaterial({color:0xa9b5a8,roughness:.92,side:T.DoubleSide});const skin=new T.MeshStandardMaterial({color:0xbfa17f,roughness:1});const hair=new T.MeshStandardMaterial({color:0x131c1c,roughness:.95});
+ function part(g,m,px,py,pz){const o=new T.Mesh(g,m);o.position.set(px,py,pz);o.castShadow=true;o.receiveShadow=true;root.add(o);return o;}
+ const skirtProfile=[[.12,1.22],[.2,1.05],[.29,.7],[.42,.24],[.48,.08],[.44,.025]].map(p=>new T.Vector2(...p));
+ const skirt=part(new T.LatheGeometry(skirtProfile,48),cloth,0,0,0);const a=skirt.geometry.attributes.position;for(let i=0;i<a.count;i++){const vx=a.getX(i),vz=a.getZ(i),ang=Math.atan2(vz,vx),f=1+.065*Math.cos(ang*16)*(1-a.getY(i)/1.5);a.setX(i,vx*f);a.setZ(i,vz*f);}a.needsUpdate=true;skirt.geometry.computeVertexNormals();
+ part(new T.CylinderGeometry(.26,.19,.52,12),cloth,0,1.4,0);part(new T.SphereGeometry(.185,16,12),skin,0,1.91,.015);part(new T.SphereGeometry(.192,16,12),hair,0,1.97,-.045);part(new T.SphereGeometry(.125,12,8),hair,0,2.13,-.11);
+ const sash=part(new T.BoxGeometry(.43,.09,.31),new T.MeshStandardMaterial({color:0xbfa782,roughness:.8}),0,1.2,.02);
+ for(const side of [-1,1]){const arm=part(new T.CylinderGeometry(.16,.23,.68,10),cloth,side*.32,1.27,.12);arm.rotation.z=side*.24;arm.rotation.x=-.2;part(new T.SphereGeometry(.09,10,8),skin,side*.38,.99,.23);}
+ const collar=part(new T.BoxGeometry(.055,.38,.03),pale,0,1.52,.205);collar.rotation.z=.5;
+ const sleeve=part(new T.PlaneGeometry(.12,.7,1,8),cloth,.37,.94,.16);sleeve.rotation.z=-.13;
+ actors.push({root,skirt,sleeve});return root;
+}
+const stairPerson=person(-7,1.95,23.2),shoulderPerson=person(10,4.25,12),windowPerson=person(1.1,22.3,6.9),terracePerson=person(0,28.25,10.5);
+// Birds have independently articulated wings. The leading bird and the camera use the same trajectory.
+const birds=[],birdMat=new T.MeshStandardMaterial({color:0x292e2c,roughness:1,side:T.DoubleSide});
+function birdPoint(t,index=0){return new T.Vector3(-42+(t-120)*2.4-index*3.2,39+Math.sin((t-120)*.11)*1.5+index*.5,36+(t-120)*.3+index*2.3);}
+for(let i=0;i<7;i++){const root=new T.Group();scene.add(root);const body=new T.Mesh(new T.SphereGeometry(1,8,6),birdMat);body.scale.set(.16,.17,.65);body.rotation.y=Math.PI/2;root.add(body);const wings=[];for(const side of [-1,1]){const pivot=new T.Group();root.add(pivot);const g=new T.BufferGeometry();g.setAttribute('position',new T.Float32BufferAttribute([0,0,0,-.2,0,side*1.65,.4,0,side*.52],3));g.computeVertexNormals();pivot.add(new T.Mesh(g,birdMat));wings.push(pivot);}root.scale.setScalar(i===0?1.15:.75);birds.push({root,wings});}
+// Small moving boats, with a mast, sail, hull and faint local lantern.
+const boats=[];
+for(let i=0;i<4;i++){const root=new T.Group();root.position.set(-90+i*75,.34,130+i*49);scene.add(root);const hull=new T.Mesh(new T.SphereGeometry(1,12,8),wood);hull.scale.set(4.6,.55,1.1);root.add(hull);const mast=new T.Mesh(new T.CylinderGeometry(.045,.055,6,6),dark);mast.position.y=3;root.add(mast);const sg=new T.BufferGeometry();sg.setAttribute('position',new T.Float32BufferAttribute([0,1,0,0,5.8,0,2.7,1.6,0],3));sg.computeVertexNormals();root.add(new T.Mesh(sg,new T.MeshStandardMaterial({color:0xb6ac8e,roughness:1,side:T.DoubleSide})));boats.push(root);}
+// Camera keys are global, not reset at shot boundaries. PCHIP interpolation gives
+// C1-continuous position, aim and FOV, with no component overshoot through buildings.
+let keys=[];
+function key(t,p,a,f=43){keys.push({t,v:[...p,...a,f]});}
+key(0,[-9,.46,56],[0,-18,10],30);key(9,[-8,1.2,40],[-4,-8,18],43);
+key(17,[-7,3.2,24],[-7,3.15,17],43);key(24,[-11,6.4,15.8],[-10.3,6.8,10],36);
+key(31,[-14.9,9.8,14.3],[-12,8.8,10.7],40);key(38,[-15.6,11.6,14],[-14.2,9,11],43);
+key(42,[-2,6.1,14.3],[4,6,10],44);key(45,[9,5.95,10.1],[10,5.8,20],44);
+key(49,[10.5,7.5,14],[10,7,60],46);key(57,[13,12,24],[5,8,110],48);
+key(64,[47,36,73],[0,14,26],50);key(71,[80,60,100],[0,16,0],48);
+key(77,[38,36,43],[0,21,0],46);key(81,[5,25.2,22],[0,23,25],45);
+key(83,[1.3,24,12.8],[0,23,65],45);
+key(85,[.5,24,5.5],[0,23,65],45);key(91,[.2,24.1,5.6],[-3,22,85],44);
+key(97,[-1,24,6],[-5,22,100],44);key(99,[-1.3,24.2,12.8],[-5,22,85],44);key(102,[-8,25,18],[-7,22,50],45);
+key(109,[-20,27,32],[0,19,0],46);key(116,[-52,33,60],[0,23,0],45);
+key(120,[-65,35,72],[-42,39,36],27);key(123,[-73,36,86],[-34.8,39.5,36.9],12);
+key(130,[-85,38,108],[-18,40.3,39],12);key(133,[-110,44,155],[-10,35,50],27);
+key(140,[-270,90,400],[0,18,70],62);key(154,[-320,95,460],[0,15,0],59);
+key(168,[-390,100,510],[0,15,0],57);key(182,[-470,105,580],[0,15,0],55);
+key(196,[-590,110,720],[0,15,0],55);key(208,[-700,115,850],[0,15,0],56);
+key(220,[-330,80,440],[0,20,0],54);key(226,[-125,53,175],[0,26,8],50);
+key(231,[-16,33,28],[0,29,19],47);key(234,[0,30,6],[0,29.6,60],43);
+key(248,[3,30.4,6.5],[0,29.5,60],43);key(255,[12,32,19],[0,28,12],46);
+const a0=Math.atan2(25,28),r0=Math.hypot(25,28);
+for(let i=0;i<=6;i++){const u=i/6,a=a0+130*Math.PI/180*u,r=mix(r0,70,u);key(264+18*u,[Math.sin(a)*r,mix(34,38,u),Math.cos(a)*r],[0,mix(25,23,u),3*(1-u)],49);}
+const a1=a0+130*Math.PI/180;
+key(291,[Math.sin(a1+.2)*98,42,Math.cos(a1+.2)*98],[55,18,58],50);
+key(300,[-41,47,-128],[120,12,100],49);key(314,[-62,50,-190],[230,8,170],48);
+key(330,[-78,51,-220],[380,6,260],47);
+keys.sort((a,b)=>a.t-b.t);
+const slopes=keys.map(()=>Array(7).fill(0));
+for(let c=0;c<7;c++){
+ const h=[],d=[];for(let i=0;i<keys.length-1;i++){h.push(keys[i+1].t-keys[i].t);d.push((keys[i+1].v[c]-keys[i].v[c])/h[i]);}
+ slopes[0][c]=d[0];slopes[keys.length-1][c]=d[d.length-1];
+ for(let i=1;i<keys.length-1;i++){if(d[i-1]*d[i]<=0)slopes[i][c]=0;else{const w1=2*h[i]+h[i-1],w2=h[i]+2*h[i-1];slopes[i][c]=(w1+w2)/(w1/d[i-1]+w2/d[i]);}}
+}
+function pose(t){t=clamp(t,0,TOTAL);let i=0;while(i<keys.length-2&&t>keys[i+1].t)i++;const k=keys[i],l=keys[i+1],h=l.t-k.t,u=(t-k.t)/h,u2=u*u,u3=u2*u;return k.v.map((v,c)=>(2*u3-3*u2+1)*v+(u3-2*u2+u)*h*slopes[i][c]+(-2*u3+3*u2)*l.v[c]+(u3-u2)*h*slopes[i+1][c]);}
+const aim=new T.Vector3();
+function updateCamera(t){const v=pose(t);camera.position.set(v[0],v[1],v[2]);aim.set(v[3],v[4],v[5]);
+ // Smoothly acquire the bird, track its exact animated coordinates, then release it.
+ const tracking=smooth(116,123,t)*(1-smooth(130,136,t));if(tracking>0)aim.lerp(birdPoint(t),tracking);
+ camera.lookAt(aim);camera.fov=v[6];camera.updateProjectionMatrix();camera.updateMatrixWorld();}
+// Time advances linearly from 15:30 to 21:00. Colours interpolate smoothly between keys.
+const palette=[
+[0,0x46788e,0xc6c6ae,0x91a59f],
+[85,0x557b8c,0xd7ba94,0xa3ada0],
+[140,0x53697c,0xdca17b,0xa39788],
+[185,0x374e69,0xb47773,0x7b7f88],
+[220,0x203852,0x896572,0x4e6275],
+[265,0x12273e,0x47536c,0x32465b],
+[330,0x091a2c,0x293c50,0x23394c]
+].map(k=>({t:k[0],top:new T.Color(k[1]),h:new T.Color(k[2]),fog:new T.Color(k[3])}));
+const nightLights=[];for(const y of [7,19,31]){const l=new T.PointLight(0xffae63,0,32,2);l.position.set(0,y,12);scene.add(l);nightLights.push(l);}
+let shadowStamp=-1;
+function lightAt(t){
+ let i=0;while(i<palette.length-2&&t>palette[i+1].t)i++;
+ const a=palette[i],b=palette[i+1],u=smooth(a.t,b.t,t);
+ skyUniforms.uTop.value.copy(a.top).lerp(b.top,u);skyUniforms.uHorizon.value.copy(a.h).lerp(b.h,u);scene.fog.color.copy(a.fog).lerp(b.fog,u);
+ const daylight=1-smooth(105,250,t),night=smooth(170,300,t),dusk=smooth(55,155,t)*(1-smooth(205,285,t));
+ const angle=mix(.76,-.28,clamp(t/250));sun.position.set(-135,Math.sin(angle)*215,Math.cos(angle)*180);
+ sun.intensity=2.25*daylight;sun.color.setRGB(1,mix(.86,.54,smooth(80,190,t)),mix(.68,.34,smooth(80,190,t)));
+ hemi.intensity=mix(.68,.32,smooth(100,285,t));hemi.color.setRGB(mix(.72,.33,night),mix(.83,.46,night),mix(.88,.69,night));
+ fill.intensity=mix(.23,.16,night);glow.emissiveIntensity=mix(.025,1.15,smooth(170,270,t));lanternMat.emissiveIntensity=mix(.015,2.1,smooth(175,260,t));
+ nightLights.forEach(l=>l.intensity=2.2*smooth(165,270,t));
+ skyUniforms.uTime.value=t;skyUniforms.uDay.value=daylight;skyUniforms.uNight.value=night;skyUniforms.uDusk.value=dusk;skyUniforms.uSun.value.copy(sun.position).normalize();
+ waterUniforms.uSun.value.copy(skyUniforms.uSun.value);waterUniforms.uDay.value=daylight;waterUniforms.uTime.value=t;waterUniforms.uTint.value.copy(scene.fog.color).multiplyScalar(.8);
+ for(const m of [stone,wood,red,gold,teal,pale,stoneDark])if(m.userData.shader)m.userData.shader.uniforms.filmTime.value=t;
+ const stamp=Math.floor(t*6);if(stamp!==shadowStamp){renderer.shadowMap.needsUpdate=true;shadowStamp=stamp;}
+}
+// Visibility windows open/close while the respective figure is occluded or outside the view.
+// There are no animated people in the remaining broad landscape passages.
+function worldAt(t){lightAt(t);
+ stairPerson.visible=t>=9&&t<17;shoulderPerson.visible=t>=45&&t<57;windowPerson.visible=t>=85&&t<97;terracePerson.visible=t>=220&&t<282;
+ actors.forEach((a,i)=>{a.skirt.rotation.y=Math.sin(t*.7+i)*.02;a.sleeve.rotation.x=Math.sin(t*1.3+i)*.13;});
+ birds.forEach((b,i)=>{b.root.position.copy(birdPoint(t,i));b.wings[0].rotation.x=Math.sin(t*3.3+i*.7)*.65;b.wings[1].rotation.x=-Math.sin(t*3.3+i*.7)*.65;});
+ boats.forEach((b,i)=>{b.position.x=-90+i*75+t*(.07+i*.012);b.position.y=.36+Math.sin(t*.8+i)*.055;b.rotation.z=Math.sin(t*.55+i)*.018;});
+}
+// Playback and inspection share one time value, including clouds, wings and reflection.
+let time=0,playing=false,loop=false,loopIndex=0,index=0,last=performance.now(),lastUI=-1,fpsFrames=0,fpsBegin=last,fpsValue=0,autoTier=1,slowWindows=0;
+const buttons=[];
+for(const s of SHOTS){if([1,7,15,21].includes(s.id)){const title=document.createElement('div');title.className='chapter';title.textContent=({1:'一 / 入景 · 00:00—00:45',7:'二 / 登临·江山 · 00:45—02:20',15:'三 / 唱晚·拒怀 · 02:20—03:40',21:'四 / 收束·诗 · 03:40—05:30'})[s.id];$('shot-list').appendChild(title);}const b=document.createElement('button');b.className='shot';b.innerHTML='<span class="shot-line"><span class="shot-no">'+String(s.id).padStart(2,'0')+'</span><span class="shot-name">'+s.name+'</span><span class="shot-time">'+mm(s.start)+'—'+mm(s.end)+'</span></span><span class="shot-desc">'+s.detail+'</span><span class="shot-meta">'+s.duration+' 秒 · '+s.size+' · '+s.move+' · 人物：'+s.person+'</span>';b.onclick=()=>jump(s.id-1);$('shot-list').appendChild(b);buttons.push(b);}
+function shotAt(t){return SHOTS.findIndex(s=>t<s.end||s.id===27);}
+function updateUI(force=false){index=shotAt(time);const s=SHOTS[index];if(force||lastUI!==index){buttons.forEach((b,i)=>{b.classList.toggle('active',i===index);if(i===index)b.setAttribute('aria-current','true');else b.removeAttribute('aria-current');});lastUI=index;}$('play').textContent=playing?'Ⅱ 暂停':time>=TOTAL?'↺ 重播':'▶ 播放';$('seek').value=time;$('time').textContent=mm(time)+' / 05:30';$('current').textContent=String(index+1).padStart(2,'0')+' / 27 · 本镜 '+mm(time-s.start)+' / '+mm(s.duration)+' · '+Math.floor(time/TOTAL*100)+'%';let minutes=930+time; // 330 film seconds = 330 story minutes.
+$('clock').textContent=String(Math.floor(minutes/60)).padStart(2,'0')+':'+String(Math.floor(minutes%60)).padStart(2,'0');$('shot-info').textContent=String(index+1).padStart(2,'0')+' · '+s.name+'｜'+s.move;$('loop').setAttribute('aria-pressed',String(loop));$('loop').textContent=loop?'循环：第 '+String(loopIndex+1).padStart(2,'0')+' 镜':'单镜循环';}
+function jump(i){i=clamp(i,0,26);time=SHOTS[i].start;loopIndex=i;last=performance.now();updateUI(true);}
+function togglePlay(){if(time>=TOTAL)time=loop?SHOTS[loopIndex].start:0;playing=!playing;last=performance.now();updateUI();}
+$('sequence').onclick=()=>{loop=false;time=0;playing=true;last=performance.now();updateUI(true);};$('play').onclick=togglePlay;$('prev').onclick=()=>jump(shotAt(time)-1);$('next').onclick=()=>jump(shotAt(time)+1);
+$('loop').onclick=()=>{loop=!loop;loopIndex=shotAt(time);if(loop&&time>=TOTAL)time=SHOTS[loopIndex].start;updateUI();};
+$('seek').oninput=e=>{time=Number(e.target.value);loopIndex=shotAt(time);last=performance.now();updateUI(true);};
+function toggleMenu(){const open=$('menu').hidden;$('menu').hidden=!open;$('menu-toggle').setAttribute('aria-expanded',String(open));$('menu-toggle').textContent=open?'关闭分镜 ×':'分镜 27 ☰';}
+$('menu-toggle').onclick=toggleMenu;
+function clean(){document.body.classList.toggle('clean');}$('clean').onclick=clean;$('restore').onclick=clean;
+addEventListener('keydown',e=>{if(e.ctrlKey||e.metaKey||e.altKey)return;const tag=document.activeElement.tagName;if(['INPUT','SELECT','TEXTAREA'].includes(tag))return;if(e.code==='Space'){e.preventDefault();togglePlay();}else if(e.key==='ArrowLeft'){e.preventDefault();jump(shotAt(time)-1);}else if(e.key==='ArrowRight'){e.preventDefault();jump(shotAt(time)+1);}else if(e.key.toLowerCase()==='l')$('loop').click();else if(e.key.toLowerCase()==='m')toggleMenu();else if(e.key.toLowerCase()==='h')clean();else if(e.key==='Escape'){if(!$('menu').hidden)toggleMenu();document.body.classList.remove('clean');}});
+// Auto mode scales only resolution, never time or geometry; reflection stays live.
+function resize(){let mode=$('quality').value;let dpr=mode==='high'?Math.min(devicePixelRatio,1.8):mode==='low'?.85:Math.min(devicePixelRatio,1.35)*autoTier;renderer.setPixelRatio(dpr);renderer.setSize(innerWidth,innerHeight,false);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();reflectionSize=mode==='high'?1024:mode==='low'?384:autoTier<.8?384:768;reflectionTarget.setSize(reflectionSize,reflectionSize);}
+$('quality').onchange=()=>{autoTier=1;slowWindows=0;resize();};addEventListener('resize',resize);resize();
+// Local, deterministic structural tests. They do NOT assert artistic quality or hardware fps.
+let minSpeed=Infinity,maxBoundaryGap=0,badNumber=false;
+for(let t=0;t<TOTAL;t+=.1){const a=pose(t),b=pose(Math.min(TOTAL,t+.01));const speed=Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2])/.01;minSpeed=Math.min(minSpeed,speed);if(a.some(x=>!Number.isFinite(x)))badNumber=true;}
+for(const s of SHOTS.slice(1)){const a=pose(s.start-.00001),b=pose(s.start+.00001);maxBoundaryGap=Math.max(maxBoundaryGap,Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]));}
+const structuralOK=!badNumber&&minSpeed>0&&maxBoundaryGap<.02;
+const items=[
+'✓ 数据校验：27 镜，时长合计 330 秒。',
+(structuralOK?'✓':'⚠')+' 路径采样：最小速度 '+minSpeed.toFixed(3)+' 单位/秒；边界双侧间隔 '+maxBoundaryGap.toFixed(5)+'。这是数值检查，非目视验收。',
+'□ 待目视：起幅倒影先于实体（01—02）。',
+'□ 待目视：07 镜越肩后将人留在身后。',
+'✓ 24 镜轨迹设定环绕130°；柱、檐与窗框掠镜效果待目视。',
+'✓ 13 镜123—130秒瞄准点与领鸟位置相同；19镜远点构图待目视。',
+'✓ 时辰公式单调：15:30→21:00；色彩平滑度待目视。',
+'✓ 每帧镜像相机重渲染水面；使用距离平方指数雾。反射视觉正确性待实测。',
+'□ 待交互实测：菜单开关、27项跳转、从头顺播。',
+'□ 待交互实测：暂停、继续、单镜循环。循环回起点为检查模式的主动重置。',
+'□ 待交互实测：镜号、镜内时长、进度条、键盘与鼠标。',
+'□ 帧率由右下角实时测量，尚无作者实测结论；控制台也未人工验收。',
+'✓ 人物可见时间限定在02、07、10、21—24，共7镜；27镜保留16秒。',
+'制作取舍：重点设计01、07、13、24；09镜入窗、21镜归台跨度较大。建筑与人物为程序化意象，非实测复刻；结尾以微移保留活水。',
+'验证声明：作者未在浏览器实际运行。以上“数据/路径”结果由本页启动时计算；画质、穿模、交互、性能仍需实际播放检查。'
+];items.forEach(text=>{const d=document.createElement('div');d.textContent=text;$('checks').appendChild(d);});
+window.filmInspection={shots:SHOTS,total:TOTAL,poseAt:pose,get time(){return time;},get playing(){return playing;},get fps(){return fpsValue;},structural:{minSpeed,maxBoundaryGap,finite:!badNumber},seek(t){time=clamp(Number(t),0,TOTAL);loopIndex=shotAt(time);updateUI(true);}};
+$('film').addEventListener('webglcontextlost',e=>{e.preventDefault();playing=false;fail('WebGL 图形上下文已丢失。请关闭占用显存的页面后重新载入，或选择流畅画质。');});
+for(const id of ['sequence','play','prev','next','loop'])$(id).disabled=false;
+worldAt(0);updateCamera(0);updateUI(true);
+function frame(now){if(failed)return;requestAnimationFrame(frame);const dt=Math.max(0,(now-last)/1000);last=now;
+ if(playing&&!document.hidden){time+=dt;if(loop){const s=SHOTS[loopIndex];if(time>=s.end)time=s.start+(time-s.start)%s.duration;}else if(time>=TOTAL){time=TOTAL;playing=false;}}
+ worldAt(time);updateCamera(time);renderer.info.reset();reflectScene();renderer.render(scene,camera);
+ fpsFrames++;if(now-fpsBegin>1500){fpsValue=fpsFrames*1000/(now-fpsBegin);$('fps').textContent=fpsValue.toFixed(0)+' fps';if($('quality').value==='auto'&&fpsValue<34){slowWindows++;if(slowWindows>=2&&autoTier>.58){autoTier=Math.max(.58,autoTier*.82);resize();slowWindows=0;}}else slowWindows=0;fpsBegin=now;fpsFrames=0;}
+ if(Math.floor(now/100)!==Math.floor((now-dt*1000)/100)||!playing)updateUI();
+}
+document.addEventListener('visibilitychange',()=>{last=performance.now();fpsBegin=last;fpsFrames=0;});
+// Render first, then dismiss the loading screen. Initial frame waits for the user's play action.
+reflectScene();renderer.render(scene,camera);$('loading').style.opacity='0';setTimeout(()=>$('loading').style.display='none',850);last=performance.now();requestAnimationFrame(frame);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b121c">
+<title>最后的守夜 · The Last Vigil</title>
+<style>
+  *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#080e16}
+  body{font-family:Georgia,'Times New Roman',serif;color:#d4d1b9}
+  #world{position:fixed;inset:0;width:100%;height:100%;display:block;object-fit:cover;image-rendering:pixelated;image-rendering:crisp-edges}
+  .vignette{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at 51% 48%,transparent 28%,rgba(3,8,16,.12) 72%,rgba(3,8,16,.48) 120%)}
+  .heading{position:fixed;left:4.2vw;top:6.1vh;pointer-events:none;text-shadow:0 2px 18px #030a12;transition:opacity 1.8s}
+  .eyebrow{font:9px/1.5 system-ui,sans-serif;letter-spacing:.36em;color:#b9bca9;opacity:.65}
+  h1{font-size:clamp(18px,2.1vw,31px);line-height:1.5;font-weight:400;letter-spacing:.28em;margin:9px 0 5px}
+  .subtitle{font-size:10px;letter-spacing:.23em;color:#a2b1ae;opacity:.68}
+  .signature{position:fixed;left:4.2vw;bottom:4.6vh;font:9px/1.8 system-ui,sans-serif;letter-spacing:.26em;color:#91a5a7;opacity:.6;pointer-events:none;transition:opacity 1s}
+  .controls{position:fixed;right:3.8vw;bottom:3.9vh;display:flex;gap:7px;opacity:0;transition:opacity .7s}
+  body.awake .controls,.controls:focus-within{opacity:1}
+  button{width:34px;height:34px;display:grid;place-items:center;border:1px solid #aebba72b;border-radius:3px;background:#0b151d66;color:#bfcbc3;cursor:pointer;backdrop-filter:blur(8px)}
+  button:hover,button:focus-visible{border-color:#d1c4918c;background:#233333a0;outline:none}button svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.4}
+  body.clean .heading,body.clean .signature{opacity:0}body.clean{cursor:none}body.awake{cursor:default}
+  .help{position:fixed;right:3.8vw;bottom:calc(3.9vh + 46px);font:10px system-ui,sans-serif;letter-spacing:.08em;color:#a0b2af;opacity:0;transition:opacity .7s;pointer-events:none}body.awake .help{opacity:.65}
+  @media(prefers-reduced-motion:reduce){.heading,.controls,.signature{transition:none}}
+</style>
+</head>
+<body class="awake">
+<canvas id="world" width="960" height="540" aria-label="像素艺术动画：月光与细雨中的中世纪墓园，一位披着暗红披风的铠甲骑士单膝跪地，双手扶剑，向墓碑低头。远处有城堡、山谷与湖面，近处的蜡烛与落叶轻轻摇动。"></canvas>
+<div class="vignette"></div>
+<header class="heading"><div class="eyebrow">AN ENDLESS PIXEL REQUIEM</div><h1>最后的守夜</h1><div class="subtitle">T H E &nbsp; L A S T &nbsp; V I G I L</div></header>
+<div class="signature">誓言长存，直至黎明。<br><span style="font-size:8px;letter-spacing:.18em;opacity:.58">FOR ALL THE DAWNS YOU WILL NOT SEE.</span></div>
+<div class="help">空格 暂停 · F 全屏 · H 隐藏文字</div>
+<div class="controls">
+<button id="pause" type="button" title="暂停 / 继续（空格）" aria-label="暂停动画"><svg viewBox="0 0 16 16"><path id="pauseIcon" d="M5 3v10M11 3v10"/></svg></button>
+<button id="text" type="button" title="显示 / 隐藏文字（H）" aria-label="显示或隐藏文字"><svg viewBox="0 0 16 16"><path d="M3 4V2h10v2M8 2v12M5 14h6"/></svg></button>
+<button id="fullscreen" type="button" title="全屏（F）" aria-label="切换全屏"><svg viewBox="0 0 16 16"><path d="M2 6V2h4m4 0h4v4m0 4v4h-4m-4 0H2v-4"/></svg></button>
+</div>
+<script>
+'use strict';
+(() => {
+  // Everything is painted locally. No images, fonts, libraries or network requests.
+  const W=960,H=540,TAU=Math.PI*2,LOOP=48;
+  const canvas=document.getElementById('world');
+  const out=canvas.getContext('2d',{alpha:false});
+  out.imageSmoothingEnabled=false;
+  let g,seed=1;
+  const rnd=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296};
+  const rand=(a,b)=>a+rnd()*(b-a);
+  const pick=a=>a[(rnd()*a.length)|0];
+  const px=v=>Math.round(v);
+  const mod=(v,n)=>(v%n+n)%n;
+  function rect(x,y,w,h,c){g.fillStyle=c;g.fillRect(px(x),px(y),Math.ceil(w),Math.ceil(h))}
+  function poly(points,c){g.fillStyle=c;g.beginPath();g.moveTo(px(points[0][0]),px(points[0][1]));for(let i=1;i<points.length;i++)g.lineTo(px(points[i][0]),px(points[i][1]));g.closePath();g.fill()}
+  function line(x1,y1,x2,y2,c,width=1){g.strokeStyle=c;g.lineWidth=width;g.beginPath();g.moveTo(px(x1)+.5,px(y1)+.5);g.lineTo(px(x2)+.5,px(y2)+.5);g.stroke()}
+  function ellipse(x,y,rx,ry,c){g.fillStyle=c;g.beginPath();g.ellipse(px(x),px(y),rx,ry,0,0,TAU);g.fill()}
+  function glow(x,y,r,c,alpha=1){g.save();g.globalAlpha=alpha;const a=g.createRadialGradient(x,y,0,x,y,r);a.addColorStop(0,c);a.addColorStop(1,'rgba(0,0,0,0)');g.fillStyle=a;g.fillRect(x-r,y-r,r*2,r*2);g.restore()}
+  function layer(draw, s=123){const c=document.createElement('canvas');c.width=W;c.height=H;g=c.getContext('2d');g.imageSmoothingEnabled=false;seed=s;draw();return c}
+  function dither(x,y,w,h,c,density=.15,size=1){for(let i=0;i<w*h*density/(size*size);i++)rect(rand(x,x+w),rand(y,y+h),size,size,c)}
+  const sky=layer(()=>{
+    const gr=g.createLinearGradient(0,0,0,355);
+    gr.addColorStop(0,'#101b30');gr.addColorStop(.35,'#263b4d');gr.addColorStop(.66,'#536565');gr.addColorStop(.86,'#93917b');gr.addColorStop(1,'#b6a582');
+    g.fillStyle=gr;g.fillRect(0,0,W,H);
+    glow(344,148,220,'rgba(208,193,136,.14)');
+    // A restrained ordered dither avoids smooth vector-like sky gradients.
+    const colors=['#b7c6bb','#627e89','#173344'];
+    for(let y=0;y<350;y+=2)for(let x=0;x<W;x+=2){if(rnd()<.065){g.globalAlpha=.14;rect(x,y,1,1,pick(colors))}}g.globalAlpha=1;
+    for(let i=0;i<74;i++){const x=rand(85,870),y=rand(18,186);rect(x,y,1,1,`rgba(204,216,207,${rand(.13,.55)})`)}
+    // The moon is made of individual stepped scanlines, not a vector disc.
+    const mx=351,my=111,r=25;
+    glow(mx,my,95,'rgba(230,215,161,.13)');glow(mx,my,46,'rgba(233,213,150,.1)');
+    for(let y=-r;y<=r;y++){const rw=Math.floor(Math.sqrt(r*r-y*y));rect(mx-rw,my+y,rw*2,1,y<-17?'#c9c5a5':'#ded3ac')}
+    for(let i=0;i<135;i++){const x=rand(-23,23),y=rand(-23,23);if(x*x+y*y<530)rect(mx+x,my+y,rand(1,4),1,pick(['#babda2','#c8c6a5','#e6dbb5']))}
+    rect(346,90,5,2,'#e6dcba');rect(331,109,3,5,'#c0bfa1');rect(359,122,6,2,'#babb9c');
+  },441);
+
+  const cloudForms=[];
+  seed=981;
+  for(let i=0;i<24;i++)cloudForms.push({x:rand(-200,1160),y:rand(24,255),w:rand(95,275),h:rand(5,20),speed:pick([1,2]),a:rand(.035,.15),phase:rand(0,TAU)});
+  function clouds(t){
+    for(const c of cloudForms){const dx=Math.sin(TAU*t/LOOP+c.phase)*22*c.speed;
+      g.globalAlpha=c.a;for(let j=0;j<4;j++)rect(c.x+dx+j*11,c.y+j*3,c.w-j*24,c.h-j*2,j===0?'#c2c9b5':'#12293a');}
+    g.globalAlpha=1;
+    // A veil passing slowly in front of the moon.
+    g.globalAlpha=.22;poly([[282,117],[320,113],[355,115],[391,110],[438,112],[473,120],[425,122],[382,119],[343,122],[311,120]],'#344956');g.globalAlpha=1;
+  }
+
+  function ridge(base,amp,step,c){const pts=[[0,H]];let y=base;for(let x=-20;x<=W+step;x+=step){y=base+rand(-amp,amp);pts.push([x,y])}pts.push([W,H]);poly(pts,c)}
+  function pine(x,y,h,c){
+    rect(x-1,y-h,2,h,c);
+    for(let i=0;i<8;i++){const yy=y-h+i*h/9,w=h*(.08+i*.025);poly([[x,yy-h*.2],[x-w,yy+h*.11],[x+w,yy+h*.11]],c)}
+  }
+  function pointedWindow(x,y,w,h,c){poly([[x,y+h],[x,y+w*.65],[x+w*.25,y+w*.24],[x+w*.5,y],[x+w*.75,y+w*.24],[x+w,y+w*.65],[x+w,y+h]],c)}
+  const distance=layer(()=>{
+    ridge(264,33,44,'#697b7a');ridge(278,20,32,'#5d7474');
+    // Weather-softened mountain faces.
+    poly([[0,279],[113,215],[159,254],[186,247],[228,278]],'#5b7377');
+    poly([[112,215],[126,252],[159,254]],'#70817c');
+    poly([[566,275],[663,209],[744,266],[791,235],[877,279]],'#61797a');
+    poly([[662,209],[650,249],[681,234],[702,256],[741,266]],'#738480');
+    ridge(297,13,23,'#49686e');
+    // A distant ruined cathedral on a narrow ridge.
+    poly([[176,288],[184,268],[193,266],[193,238],[199,238],[199,232],[205,232],[205,214],[208,209],[212,214],[212,232],[218,232],[218,239],[222,239],[222,251],[232,251],[232,236],[237,236],[237,231],[241,231],[241,209],[244,209],[244,187],[247,174],[250,187],[250,210],[254,210],[254,233],[262,233],[262,240],[270,240],[270,259],[287,267],[290,286]],'#38565f');
+    poly([[222,258],[231,249],[258,249],[268,258]],'#46626a');
+    rect(232,258,32,30,'#3d5a62');
+    pointedWindow(240,260,7,18,'#73857c');pointedWindow(202,240,5,17,'#76877d');pointedWindow(248,237,4,9,'#6a8079');
+    rect(243,264,1,15,'#38565f');line(239,271,248,271,'#38565f');
+    line(207,209,207,201,'#39575e');line(204,204,210,204,'#39575e');
+    for(let i=0;i<26;i++){const x=rand(175,300),y=rand(275,290);rect(x,y,rand(3,9),rand(2,8),'#3b5b63')}
+    poly([[142,292],[184,282],[246,289],[294,280],[353,304],[390,320],[116,320]],'#3d6067');
+    // The river bends from the horizon into the valley.
+    const water=g.createLinearGradient(0,304,0,368);water.addColorStop(0,'#89977f');water.addColorStop(.4,'#617f7e');water.addColorStop(1,'#385e69');g.fillStyle=water;g.fillRect(0,305,W,71);
+    poly([[0,304],[122,297],[207,304],[296,304],[331,309],[315,313],[251,315],[202,321],[94,331],[0,338]],'#3a5f67');
+    poly([[960,295],[817,289],[733,304],[632,304],[555,307],[510,312],[557,317],[655,320],[746,331],[960,344]],'#3e656b');
+    for(let i=0;i<430;i++){const y=rand(307,371),x=rand(0,W);rect(x,y,rand(2,16),1,pick(['#739184','#54797a','#547679','#8a9c87']))}
+    // Tiny causeway, crenellations and an arched bridge over the water.
+    poly([[91,313],[121,308],[145,309],[166,305],[184,307],[184,316],[91,322]],'#345862');
+    for(let x=93;x<181;x+=9)rect(x,309,4,4,'#345862');
+    rect(162,310,3,20,'#365b63');rect(178,310,3,16,'#365b63');
+    for(let x=0;x<325;x+=rand(4,10)){const yy=302+Math.sin(x*.03)*6;pine(x,yy,rand(5,16),'#365963')}
+    for(let x=654;x<970;x+=rand(4,11))pine(x,310+Math.sin(x*.03)*4,rand(9,26),'#355b64');
+    // Nearer wooded promontories, with cool haze between planes.
+    poly([[0,330],[92,327],[161,339],[228,341],[263,352],[321,355],[357,370],[0,396]],'#294c58');
+    poly([[960,320],[864,324],[823,334],[769,335],[718,352],[679,359],[650,375],[960,399]],'#254a55');
+    for(let i=0;i<78;i++){const x=rand(0,250);pine(x,350+x*.055,rand(8,31),'#2c515d')}
+    for(let i=0;i<67;i++){const x=rand(723,965);pine(x,350-(x-723)*.05,rand(12,36),'#294e59')}
+    g.globalAlpha=.1;rect(0,317,W,5,'#b8c5ac');rect(0,335,W,3,'#a6bbad');g.globalAlpha=1;
+  },7731);
+
+  function smallGrave(x,y,s=1,light=false){g.save();g.translate(px(x),px(y));g.scale(s,s);
+    const c=light?'#52656a':'#274550';poly([[-8,0],[-7,-22],[-5,-26],[5,-26],[8,-22],[9,0]],c);rect(-11,-1,23,4,c);line(-4,-21,4,-21,light?'#71817b':'#3e5a61');line(0,-20,0,-12,'#213f4b');line(-3,-17,3,-17,'#213f4b');g.restore()}
+  const terrace=layer(()=>{
+    // Grass-topped rock escarpment. Diagonal seams lead toward the kneeling figure.
+    poly([[0,382],[68,378],[111,383],[186,371],[231,378],[277,372],[328,368],[357,373],[404,369],[454,375],[497,370],[550,375],[602,369],[652,376],[706,371],[758,380],[817,371],[873,378],[960,375],[960,540],[0,540]],'#1b323a');
+    poly([[0,404],[130,395],[228,391],[347,388],[434,394],[541,389],[684,398],[804,390],[960,406],[960,483],[0,489]],'#293b3d');
+    poly([[0,440],[140,435],[245,415],[374,405],[511,410],[616,419],[755,425],[960,457],[960,540],[0,540]],'#203238');
+    // Stone retaining wall in the middle distance.
+    for(let row=0;row<2;row++)for(let col=-1;col<27;col++){
+      const x=col*42+(row%2)*21,y=365+row*12;
+      poly([[x,y+3],[x+38,y],[x+40,y+10],[x+1,y+12]],pick(['#344b4d','#3b5051','#405455','#32494d']));
+      line(x+2,y+3,x+36,y+1,'#53635c');line(x+38,y+2,x+38,y+8,'#243c42');
+      if(rnd()<.5)rect(x+rand(4,30),y+rand(4,9),rand(3,8),1,'#5b675b');
+    }
+    // Small memorials receding toward the valley.
+    smallGrave(104,371,.76);smallGrave(167,369,.52,true);smallGrave(249,368,.55,true);smallGrave(709,370,.6,true);smallGrave(754,377,.83);smallGrave(798,370,.55);
+    rect(279,340,4,29,'#39555b');rect(271,347,20,4,'#39555b');rect(276,338,10,4,'#3f5b5d');
+    rect(674,341,3,28,'#3a565b');rect(668,347,16,4,'#3a565b');
+    // Dark loam and lichen. Clustered strokes, rather than uniform image noise.
+    for(let i=0;i<7800;i++){
+      const x=rand(0,W),y=rand(378,540),s=(y-370)/170;
+      rect(x,y,rand(1,3+s*3),pick([1,1,2]),pick(['#2a403f','#344843','#172e36','#31413c','#3f4c40','#1b353b']));
+    }
+    // Cobblestones radiate away from the graveside.
+    for(let row=0;row<7;row++){
+      const y=399+row*16,scale=1+row*.16;
+      for(let col=-4;col<8;col++){
+        const x=457+(col-1)*41*scale+row*13+(row%2)*18;
+        if(x<50||x>913||rnd()<.22)continue;
+        const w=rand(24,37)*scale,h=rand(6,11)*scale;
+        poly([[x-w/2,y],[x+w/2-4,y-2],[x+w/2+5,y+h-2],[x-w/2+2,y+h]],'#142c34');
+        poly([[x-w/2+1,y-1],[x+w/2-4,y-3],[x+w/2+3,y+h-4],[x-w/2+3,y+h-2]],pick(['#3d4c48','#40504c','#344949','#43514a','#3a4c48']));
+        line(x-w/2+2,y-1,x+w/2-5,y-3,'#5d6556');
+        if(rnd()<.65)line(x-3,y,x+2,y+h-4,'#243e40');
+        if(rnd()<.6)rect(x+rand(-7,8),y+rand(1,4),rand(2,7),1,'#637063');
+      }
+    }
+    // Flattened slick rock surrounding the knight and tomb.
+    ellipse(531,406,156,16,'#1c3238');ellipse(551,407,126,11,'#344747');
+    for(let i=0;i<220;i++){const x=rand(377,696),y=rand(395,423);if(((x-534)/160)**2+((y-406)/16)**2<1)rect(x,y,rand(1,7),1,pick(['#50615b','#243c41','#3e5551']))}
+    // Broken capstones.
+    poly([[288,398],[311,388],[338,391],[343,399],[313,407]],'#4d5c56');poly([[288,398],[313,403],[343,395],[343,401],[313,410],[288,403]],'#263e40');
+    line(293,396,313,390,'#75806a');line(315,392,327,398,'#2b4545');
+    poly([[700,410],[716,402],[746,405],[751,415],[727,424],[703,420]],'#41534f');line(707,409,721,404,'#6d7762');
+    // Puddles hold little slivers of the sky.
+    for(const p of [[327,438,50,5],[468,461,70,6],[631,443,42,4],[790,467,68,6],[214,480,41,4],[570,492,99,7],[860,419,33,3]]){
+      ellipse(p[0],p[1],p[2],p[3]+2,'#152f38');ellipse(p[0],p[1],p[2]-2,p[3],'#3d5656');
+      for(let i=0;i<12;i++)rect(p[0]+rand(-p[2]+5,p[2]-5),p[1]+rand(-p[3]+1,p[3]-1),rand(2,13),1,pick(['#526b64','#60756a','#354e52']));
+    }
+    // Minute autumn leaves on the wet earth.
+    for(let i=0;i<750;i++){
+      const x=rand(0,W),y=rand(380,540),sz=rand(1,3);
+      rect(x,y,sz,1,pick(['#9e7948','#725d39','#b08a4c','#695c3d','#4b5140','#927545']));
+      if(sz>2)rect(x+1,y-1,1,1,'#b49555');
+    }
+  },3719);
+
+  function branch(points,w,c){for(let i=0;i<points.length-1;i++)line(points[i][0],points[i][1],points[i+1][0],points[i+1][1],c,Math.max(1,w*(1-i/points.length)))}
+  function leafCluster(x,y,r,palette,count=30){for(let i=0;i<count;i++){let a=rand(0,TAU),d=Math.sqrt(rnd())*r;const xx=x+Math.cos(a)*d,yy=y+Math.sin(a)*d*.42;rect(xx,yy,rand(2,8),rand(1,4),pick(palette))}}
+  const trees=layer(()=>{
+    // Slim, almost invisible cypresses behind the central action.
+    for(const v of [[70,393,110],[135,385,86],[820,386,126],[763,377,61]]){
+      pine(v[0],v[1],v[2],'#203f4a');
+      for(let i=0;i<110;i++){const yy=rand(v[1]-v[2],v[1]),w=(yy-(v[1]-v[2]))*.11;rect(v[0]+rand(-w,w),yy,rand(1,4),1,'#2e4d54')}
+    }
+    // The ancient tree on the right is deliberately asymmetric.
+    poly([[848,423],[864,377],[865,318],[859,272],[869,225],[870,178],[888,135],[889,91],[908,37],[928,-9],[963,-9],[943,49],[920,101],[916,146],[899,196],[900,239],[890,280],[900,326],[889,378],[906,424]],'#132b35');
+    poly([[864,401],[877,350],[872,309],[877,262],[880,219],[890,183],[888,154],[902,122],[897,171],[891,219],[891,255],[884,281],[891,328],[881,375]],'#2b4143');
+    poly([[884,309],[891,325],[883,378],[869,408],[878,365]],'#46504a');
+    poly([[891,164],[877,125],[856,107],[827,94],[794,83],[776,69],[743,63],[719,43],[696,44],[713,57],[739,72],[767,78],[789,95],[823,107],[850,122],[873,144],[878,184]],'#152f39');
+    poly([[873,242],[840,205],[816,188],[794,166],[757,152],[730,136],[701,135],[690,122],[676,119],[687,136],[724,147],[753,164],[788,175],[810,199],[834,215],[868,264]],'#172f38');
+    branch([[858,113],[836,69],[806,43],[799,15],[777,-3]],8,'#17313b');
+    branch([[828,98],[805,110],[768,111],[734,100],[718,104]],6,'#1a333b');
+    branch([[792,83],[778,52],[761,43],[754,22]],5,'#1a333b');
+    branch([[756,68],[721,76],[688,68],[659,73],[632,66]],5,'#1a333b');
+    branch([[732,143],[712,167],[684,171],[664,187],[645,191]],5,'#1b353e');
+    branch([[811,191],[811,162],[795,143],[798,126]],5,'#1a333b');
+    branch([[898,195],[932,180],[959,143]],13,'#102a35');
+    branch([[907,125],[937,115],[960,87]],10,'#112b35');
+    branch([[911,83],[941,76],[967,53]],9,'#102a34');
+    branch([[881,330],[849,354],[831,375],[804,381]],9,'#1b333a');
+    // Bark fissures, lichen and moonward edges follow the trunk.
+    for(let i=0;i<120;i++){const y=rand(75,397),x=890+Math.sin(y*.025)*9+rand(-5,10);line(x,y,x+rand(-3,2),y+rand(3,14),pick(['#344846','#0f2833','#536054','#243d3f']))}
+    branch([[895,153],[881,130],[854,113],[827,103]],1,'#5a6050');
+    branch([[876,244],[841,208],[815,193]],1,'#4e594c');
+    for(let i=0;i<130;i++)rect(rand(860,884),rand(272,378),rand(1,3),rand(1,3),pick(['#4a5942','#607052','#273f3c']));
+    const palette=['#263d3b','#33463b','#4c5140','#5a563c','#746141','#897047','#9a7b4b','#3e4a3b'];
+    const clusters=[[949,18,92],[869,7,74],[798,20,63],[743,34,54],[687,52,55],[631,64,42],[803,83,69],[928,100,61],[959,167,61],[750,119,32],[711,146,34],[667,178,32],[831,145,37]];
+    for(const c of clusters){leafCluster(c[0],c[1],c[2],palette,240);leafCluster(c[0]-5,c[1]-8,c[2]*.7,['#5a5941','#837047','#b18a4f','#9a814c'],80)}
+    // Root fingers grip the paving.
+    for(const pts of [[[879,382],[853,409],[820,421],[792,421]],[[887,387],[898,415],[933,430],[959,433]],[[875,398],[862,426],[840,439]]])branch(pts,8,'#172f36');
+    // A left-hand tree, cooler and barer, encloses the scene without hiding the valley.
+    poly([[0,430],[34,405],[47,350],[48,283],[40,222],[37,160],[20,110],[8,48],[0,30]],'#102c38');
+    branch([[36,213],[59,174],[83,149],[96,110],[124,81],[152,67]],10,'#18343f');
+    branch([[88,133],[74,94],[76,63],[62,39]],6,'#18343f');
+    branch([[117,89],[148,98],[178,91],[198,96]],4,'#1b3841');
+    branch([[51,319],[81,289],[106,278],[120,252],[149,244]],8,'#18353f');
+    leafCluster(90,135,42,['#26443f','#3b4d40','#6c6546','#8b7547'],145);
+    leafCluster(152,84,34,['#263e3b','#42503f','#706549'],90);
+    leafCluster(117,265,29,['#30483e','#586045','#8a7546'],90);
+  },2852);
+
+  const ruins=layer(()=>{
+    // The edge of a broken chapel, with individually edged blocks and ivy.
+    poly([[0,44],[22,46],[22,60],[38,60],[38,101],[57,101],[57,136],[70,136],[70,194],[56,194],[56,295],[46,295],[46,414],[0,424]],'#192f3a');
+    for(let row=0;row<14;row++){
+      const y=58+row*25,max=row<2?30:row<4?47:row<6?62:51;
+      for(let x=-10+(row%2)*15;x<max;x+=29){
+        const w=Math.min(27,max-x);if(w<2)continue;rect(x,y,w,23,pick(['#2a3f45','#30464a','#293e46','#34494b']));
+        line(x+1,y,x+w-2,y,'#586059');line(x+w-1,y+2,x+w-1,y+21,'#182f3a');
+        for(let i=0;i<4;i++)rect(x+rand(2,w),y+rand(3,20),rand(1,5),1,'#3c4e4c');
+      }
+    }
+    poly([[45,181],[58,149],[77,125],[105,104],[138,91],[173,88],[193,92],[196,99],[171,97],[140,101],[112,113],[90,134],[74,163],[63,193]],'#34484b');
+    poly([[51,186],[64,153],[83,129],[111,108],[139,96],[171,92],[188,95],[190,98],[168,96],[140,100],[113,113],[87,134],[70,162],[59,190]],'#697060');
+    for(const a of [[62,163,73,165],[77,138,87,142],[96,119,104,126],[118,105,124,113],[143,97,145,105],[168,94,168,100]])line(...a,'#142f3b',2);
+    // Rusted iron ring and a hanging lantern, animated light is added later.
+    line(64,200,82,200,'#0d2733',2);line(81,200,87,206,'#0d2733');line(86,205,86,224,'#112c36');
+    poly([[79,226],[84,220],[88,220],[94,226]],'#132a33');rect(79,226,15,23,'#102a34');rect(82,229,9,16,'#9a814a');rect(84,230,5,13,'#d4ae5e');rect(78,249,17,3,'#1c3034');
+    line(85,227,85,248,'#263936');line(91,227,91,248,'#263936');
+    branch([[43,395],[53,343],[47,301],[58,263],[55,225],[61,186],[65,165]],2,'#314a3e');
+    for(let i=0;i<200;i++){const y=rand(160,404),x=51+Math.sin(y*.069)*6+rand(-8,8);poly([[x,y],[x-3,y-3],[x+1,y-7],[x+5,y-5],[x+4,y-1]],pick(['#1c3938','#30483b','#46563e','#596044']))}
+  },67);
+
+  // Small hand-set bitmap alphabet, engraved in the tomb's stone.
+  const font={A:['010','101','111','101','101'],B:['110','101','110','101','110'],C:['011','100','100','100','011'],D:['110','101','101','101','110'],E:['111','100','110','100','111'],F:['111','100','110','100','100'],G:['011','100','101','101','011'],H:['101','101','111','101','101'],I:['111','010','010','010','111'],L:['100','100','100','100','111'],M:['10001','11011','10101','10001','10001'],N:['1001','1101','1011','1001','1001'],O:['010','101','101','101','010'],P:['110','101','110','100','100'],Q:['010','101','101','011','001'],R:['110','101','110','101','101'],S:['011','100','010','001','110'],T:['111','010','010','010','010'],U:['101','101','101','101','111'],V:['101','101','101','101','010'],W:['10001','10001','10101','11011','10001'],Y:['101','101','010','010','010'],' ':['0','0','0','0','0']};
+  function inscription(text,x,y,color){const width=[...text].reduce((a,c)=>a+(font[c]?.[0].length||3)+1,0)-1;let xx=px(x-width/2);for(const ch of text){const a=font[ch]||font[' '];for(let yy=0;yy<5;yy++)for(let j=0;j<a[yy].length;j++)if(a[yy][j]==='1')rect(xx+j,y+yy,1,1,color);xx+=a[0].length+1}}
+
+  const memorial=layer(()=>{
+    // Contact shadow and a two-level plinth.
+    ellipse(414,406,83,10,'#0f2932');
+    poly([[355,389],[448,383],[469,393],[469,405],[366,413],[351,405]],'#243b40');
+    poly([[354,389],[448,385],[468,393],[366,402]],'#75806d');
+    poly([[366,402],[468,393],[468,402],[366,411]],'#3c504e');
+    line(367,402,465,394,'#97a08a');line(367,409,466,400,'#243e41');
+    poly([[367,382],[441,378],[452,385],[452,394],[376,399],[365,392]],'#3b514e');
+    poly([[367,382],[439,378],[452,385],[376,392]],'#89917b');
+    line(378,392,449,386,'#a2a58a');
+    // Thick side face of the tomb, chipped silhouette and a gothic shoulder.
+    poly([[378,385],[378,289],[383,276],[391,267],[402,260],[415,260],[429,267],[441,281],[447,295],[447,381]],'#263f45');
+    poly([[369,383],[370,289],[375,276],[385,266],[399,258],[414,259],[425,266],[435,279],[438,294],[438,381]],'#758477');
+    poly([[375,380],[376,290],[381,278],[391,270],[401,266],[413,266],[424,275],[431,288],[431,378]],'#536b64');
+    poly([[378,378],[379,291],[384,280],[395,272],[405,270],[414,273],[424,282],[428,293],[428,376]],'#65796d');
+    line(370,289,370,379,'#a2a58a');line(375,277,384,268,'#b2b195');line(387,266,399,259,'#b2b195');line(400,259,413,260,'#c1b99a');
+    line(438,296,438,376,'#1d3c44');line(442,298,442,371,'#3c5757');
+    // Carved arch inside the border.
+    poly([[382,373],[382,295],[387,284],[398,277],[405,275],[416,281],[423,292],[423,372]],'#7a8876');
+    poly([[384,371],[384,296],[389,286],[400,279],[405,278],[414,284],[421,295],[421,370]],'#526b63');
+    // A little relief: a sword passing through a sun, with eight tiny rays.
+    ellipse(403,298,9,9,'#3e5c58');ellipse(403,297,8,8,'#929780');ellipse(403,297,6,6,'#536e64');
+    line(403,283,403,314,'#324f50');line(404,284,404,313,'#b4ad8b');line(397,295,410,295,'#324f50');line(397,296,410,296,'#a8a486');
+    for(const a of [[403,285,403,281],[403,309,403,313],[392,297,388,297],[414,297,418,297],[395,289,392,286],[412,289,415,286]])line(...a,'#8f957c');
+    inscription('IN',403,322,'#304e4c');inscription('MEMORIAM',403,334,'#334f4e');
+    line(388,346,418,346,'#88917a');line(390,348,417,348,'#3c5854');
+    // Small weathered lettering, intentionally partly lost to the stone.
+    inscription('LUX AETERNA',403,358,'#3c5853');
+    seed=783;for(let i=0;i<230;i++){const x=rand(375,432),y=rand(281,382);if(x<382||x>424||rnd()<.24)rect(x,y,rand(1,3),1,pick(['#8d967d','#415e59','#a0a18a','#5a7063']))}
+    branch([[423,273],[419,287],[424,294],[419,309]],1,'#354f4d');line(420,290,427,293,'#425d55');
+    branch([[372,355],[383,360],[386,373],[394,380]],1,'#385551');line(383,360,390,356,'#385551');
+    // Moss on the shoulders, at the foot, and in a shallow stone fracture.
+    for(let i=0;i<120;i++){let x=rand(369,439),y=rand(375,387);rect(x,y,rand(1,4),rand(1,3),pick(['#3e5b43','#586c47','#78805a','#8a8c60']))}
+    for(let i=0;i<39;i++)rect(rand(371,381),rand(290,365),rand(1,3),rand(1,3),pick(['#77875e','#4c6b4b','#8b9167']));
+    // A faded mourning ribbon, caught on the stone.
+    poly([[437,312],[447,315],[451,337],[449,356],[455,373],[448,369],[444,351],[446,333],[442,320],[436,317]],'#263c45');line(442,319,448,336,'#53626a');
+  },781);
+
+  const stillLife=layer(()=>{
+    // A small bouquet: every stem and white flower has its own highlight.
+    for(const a of [[430,398,459,382],[433,400,470,385],[432,399,463,393],[432,399,451,380],[430,399,453,390]])line(...a,'#5f6c4a');
+    poly([[437,397],[446,389],[449,390],[442,397]],'#7b8555');poly([[449,391],[451,385],[456,384],[454,388]],'#5b774e');
+    for(const [x,y] of [[458,381],[470,383],[464,391],[450,379],[454,388]]){
+      rect(x-2,y,5,2,'#a5a690');rect(x,y-2,2,5,'#d8ceb0');rect(x+1,y,3,1,'#ece0bd');rect(x,y,1,1,'#c0a56b');
+    }
+    line(431,399,437,400,'#ab875b',2);
+    // Candle holders, drips, and dark red wax.
+    for(const [x,y,h] of [[354,401,18],[463,404,12],[346,411,10]]){
+      ellipse(x,y+1,7,2,'#122b32');rect(x-3,y-h,6,h,'#b5a27a');rect(x-3,y-h,2,h,'#d2b88c');rect(x+2,y-h,1,h,'#6e6f55');
+      rect(x-4,y-h,8,2,'#d0bd91');rect(x-2,y-h+1,2,5,'#e1c79a');rect(x+1,y-h+1,2,8,'#c8b489');
+      rect(x,y-h-2,1,3,'#332e27');
+      rect(x-6,y,12,2,'#667065');line(x-5,y,x+4,y,'#9c9b76');
+    }
+    // A retired shield leans against the roots, not against the memorial.
+    poly([[681,370],[695,362],[717,368],[718,393],[705,410],[687,402]],'#132d37');
+    poly([[683,370],[695,365],[714,370],[715,391],[704,406],[690,400]],'#6e7464');
+    poly([[686,372],[696,368],[711,372],[712,390],[704,402],[693,397]],'#394b4a');
+    poly([[688,374],[696,371],[702,373],[704,398],[695,395]],'#6f3e3d');
+    line(695,371,704,399,'#a18a63');line(689,383,708,380,'#a18a63');
+    for(const [x,y] of [[686,372],[712,372],[691,396],[704,402]])rect(x,y,1,1,'#c0b18b');
+    line(707,377,700,386,'#182f37');line(708,378,702,387,'#7c826b');
+  },79);
+
+  // The knight's silhouette is authored in separate armour plates.
+  // One knee rests on the stone; the other is raised, with the boot planted.
+  const knight=layer(()=>{
+    ellipse(580,411,88,8,'#102a33');ellipse(574,410,65,4,'#142e35');
+    // Far leg: hip -> lowered knee -> trailing greave -> sabaton.
+    poly([[579,350],[595,348],[604,367],[612,390],[606,402],[591,401],[585,381],[573,366]],'#112b36');
+    poly([[584,355],[594,354],[601,369],[606,389],[597,393],[591,379]],'#3b5158');
+    poly([[586,358],[592,356],[597,370],[600,385],[595,384]],'#6c7c7c');line(586,357,595,379,'#a3a796');
+    poly([[596,387],[611,387],[618,397],[611,404],[595,404],[588,398]],'#1c3541');
+    poly([[595,387],[606,387],[611,392],[609,399],[596,401],[591,397]],'#667977');
+    poly([[594,389],[602,387],[608,390],[605,394],[595,396]],'#a1a695');
+    line(594,400,608,400,'#344e56');rect(608,393,4,4,'#acaa94');
+    poly([[610,394],[633,389],[645,394],[647,402],[615,405]],'#263f48');
+    poly([[614,394],[631,391],[639,395],[635,400],[616,401]],'#71817b');line(614,394,632,391,'#b0b09a');
+    line(621,394,623,400,'#304b53');line(628,393,630,399,'#304b53');line(635,394,637,399,'#304b53');
+    poly([[639,393],[648,395],[651,401],[655,404],[651,409],[629,410],[627,406],[639,402]],'#172f3a');
+    poly([[642,396],[648,398],[647,404],[652,405],[648,407],[631,407],[639,404]],'#536968');
+    line(633,407,649,407,'#8c9786');line(641,401,649,402,'#263f48');
+    // Raised near leg, cuisse and overlapping knee fan.
+    poly([[578,340],[589,348],[579,366],[556,369],[538,363],[534,352],[545,341]],'#172e3b');
+    poly([[573,342],[584,348],[576,361],[558,365],[542,360],[542,349]],'#536a70');
+    poly([[569,342],[581,347],[573,354],[551,356],[541,352],[546,346]],'#81938d');
+    line(547,346,571,343,'#bec1a7');line(547,359,571,361,'#2a4651');
+    poly([[535,347],[548,348],[555,356],[551,369],[541,375],[531,368],[529,355]],'#203b47');
+    poly([[535,349],[545,350],[550,357],[546,366],[536,369],[532,363],[532,355]],'#7f918c');
+    poly([[534,351],[542,350],[546,354],[542,358],[533,359]],'#bdbea2');
+    poly([[546,354],[555,354],[560,359],[552,362],[547,370],[541,372]],'#526e72');
+    line(534,367,544,370,'#b4b39a');rect(535,360,2,2,'#d4ccaa');
+    // The forward shin slopes to a firmly planted foot.
+    poly([[536,367],[547,373],[540,391],[536,404],[520,405],[521,394],[527,377]],'#193541');
+    poly([[535,370],[543,374],[536,393],[530,402],[523,400],[528,384]],'#748680');
+    poly([[534,370],[538,372],[531,392],[527,401],[523,400],[528,382]],'#a6af99');
+    line(541,377,534,396,'#334f59');line(531,378,525,394,'#d0c4a1');
+    line(525,391,538,394,'#314c54');line(524,394,536,397,'#b3b398');
+    poly([[523,399],[535,403],[536,409],[525,414],[502,413],[497,410],[503,405],[516,404]],'#17313a');
+    poly([[521,401],[531,403],[531,408],[522,411],[501,410],[505,407],[516,406]],'#687e77');
+    line(505,407,518,405,'#c5bea0');line(501,410,522,411,'#a0a78f');
+    for(let i=0;i<4;i++)line(509+i*5,406,507+i*5,410,'#304c53');
+    // Hip lames / faulds, strapped over an arming doublet.
+    poly([[559,322],[582,320],[595,335],[591,350],[579,358],[557,352],[550,339]],'#142f3b');
+    poly([[557,330],[584,325],[589,334],[582,340],[554,343]],'#6b807d');
+    poly([[555,339],[582,335],[588,341],[580,347],[557,348]],'#455f66');
+    poly([[557,346],[580,342],[585,348],[579,353],[560,352]],'#6e817b');
+    line(558,332,581,328,'#b3b39a');line(557,341,581,337,'#a1a88e');line(561,349,580,345,'#b8b499');
+    line(584,330,589,337,'#1c3945');
+    // Back and chest: angled toward the memorial.
+    poly([[555,288],[575,286],[590,297],[592,314],[583,331],[559,335],[542,319],[543,302]],'#132f3d');
+    poly([[555,292],[571,290],[582,300],[582,315],[575,327],[558,328],[548,316],[549,302]],'#526f76');
+    poly([[555,293],[565,292],[573,302],[572,318],[562,327],[555,323],[549,313],[551,302]],'#829690');
+    poly([[555,293],[561,292],[558,304],[554,311],[554,319],[549,312],[551,302]],'#b9bca1');
+    poly([[572,294],[581,300],[584,312],[576,327],[569,329],[573,313]],'#2e505e');
+    line(561,300,559,318,'#d0c6a2');line(560,319,568,325,'#a4b097');line(574,314,578,303,'#9eada0');
+    // A subdued gold heraldic cross, etched rather than painted on.
+    line(566,304,565,318,'#8d9475');line(562,309,570,310,'#969b7c');rect(564,304,2,2,'#b6ad87');
+    line(549,321,558,330,'#b7b396');
+    // Fine chainmail under the pauldron.
+    poly([[568,287],[584,288],[590,303],[584,316],[575,310],[570,298]],'#1c3641');
+    for(let y=290;y<313;y+=3)for(let x=573;x<585;x+=3){if(x<584-(y-303)*.18){rect(x+(y%2),y,1,1,'#70847c');rect(x+(y%2),y+1,2,1,'#2c4b56')}}
+    // Far arm reaches forward and down to the sword.
+    poly([[560,298],[566,310],[551,323],[533,320],[517,309],[523,302],[541,308]],'#193442');
+    poly([[555,302],[560,309],[548,318],[534,316],[523,308],[526,305],[542,311]],'#5c7779');
+    line(538,312,548,313,'#a9b298');
+    // Shoulder plate with scalloped lower lames.
+    poly([[571,286],[584,287],[594,298],[594,309],[585,317],[570,311],[565,301],[566,292]],'#152e3a');
+    poly([[572,288],[583,289],[590,297],[590,305],[580,309],[570,304],[568,297]],'#748a85');
+    poly([[572,290],[580,289],[585,293],[583,298],[571,300],[569,296]],'#bbc0a6');
+    poly([[571,306],[581,310],[591,305],[590,310],[581,314],[573,312]],'#4a6670');
+    line(574,307,582,310,'#c2bea0');line(584,309,589,307,'#9faa94');
+    rect(574,293,2,2,'#e0d1a6');rect(585,299,2,2,'#c6c2a2');
+    // Near rerebrace, couter and vambrace form a visible diagonal to both hands.
+    poly([[571,307],[583,314],[574,332],[563,336],[552,325],[555,315]],'#183542');
+    poly([[571,310],[580,315],[573,327],[564,331],[558,325],[560,317]],'#6e8582');
+    poly([[569,310],[573,312],[567,324],[562,327],[558,323],[561,316]],'#b3b79d');
+    line(575,316,569,328,'#3a5a64');
+    poly([[558,321],[569,326],[567,334],[557,338],[548,332],[548,326]],'#2c4a54');
+    poly([[556,323],[563,326],[561,333],[554,334],[551,329]],'#9ba997');
+    line(550,327,555,324,'#d0c6a1');rect(557,328,2,2,'#d7c9a0');
+    poly([[551,328],[558,336],[544,341],[525,330],[517,321],[521,315],[533,322]],'#193644');
+    poly([[551,329],[554,334],[543,336],[526,327],[522,320],[525,318],[534,325]],'#7c918b');
+    poly([[548,329],[548,332],[541,333],[529,326],[525,321],[528,321],[535,326]],'#bbc0a3');
+    line(529,329,540,336,'#3c5961');line(525,323,529,328,'#e0cfa5');
+    // Leather cuffs and two distinct articulated gauntlets stacked on the pommel.
+    poly([[516,305],[527,306],[530,312],[525,317],[514,313]],'#263f46');
+    poly([[513,302],[522,302],[528,307],[526,312],[519,314],[511,309]],'#84948a');
+    line(513,303,521,303,'#e0c9a0');line(513,306,524,307,'#4c686b');line(515,309,523,310,'#506c6d');rect(512,304,2,3,'#bfc0a1');
+    poly([[513,315],[521,313],[529,317],[529,324],[525,328],[516,325],[510,320]],'#233e49');
+    poly([[514,316],[521,315],[526,318],[525,324],[518,323],[512,320]],'#a1ad98');
+    line(514,316,521,316,'#e2cf9e');line(515,319,523,320,'#4d6b6a');line(516,322,524,323,'#5b7470');
+    rect(525,317,2,5,'#b4b89d');
+    // Gorget and chain coif support the lowered helmet.
+    poly([[552,276],[568,275],[576,285],[571,298],[558,297],[547,287]],'#163341');
+    for(let y=280;y<296;y+=3)for(let x=552;x<569;x+=3){rect(x+(y%2),y,1,1,'#75887e');rect(x+(y%2),y+1,2,1,'#294954')}
+    poly([[552,286],[562,292],[573,289],[575,293],[565,300],[553,296],[548,290]],'#6e8683');
+    line(553,290,563,295,'#bec0a2');
+    // Bascinet: the visor is inclined downward toward the grave, not facing out.
+    poly([[540,248],[553,243],[568,246],[580,257],[582,269],[574,284],[561,291],[546,283],[535,271],[532,262]],'#102e3b');
+    poly([[541,249],[553,246],[565,248],[575,258],[577,268],[569,281],[559,286],[548,280],[537,268],[536,261]],'#6d8586');
+    poly([[541,250],[551,247],[560,249],[552,255],[547,264],[546,274],[539,268],[536,261]],'#b5bea7');
+    poly([[560,249],[570,254],[576,263],[574,272],[566,281],[559,284],[562,270],[558,261]],'#486b76');
+    poly([[552,248],[560,249],[566,254],[560,254],[552,251]],'#d2c9a7');
+    line(553,248,550,257,'#d6cbab');line(550,258,547,266,'#b4bfa7');
+    // The pointed visor and black eye slit are the key to the grieving profile.
+    poly([[537,261],[546,264],[558,274],[560,281],[552,286],[538,276],[529,268],[532,263]],'#7e928c');
+    poly([[534,262],[544,266],[554,274],[550,276],[538,270],[531,267]],'#bec0a4');
+    poly([[534,267],[540,269],[552,278],[551,281],[539,274],[533,271]],'#0d2937');
+    line(536,266,551,277,'#d7cba6');
+    poly([[531,270],[539,276],[551,283],[551,286],[541,282],[532,275]],'#526f77');
+    line(533,275,543,282,'#b9b79b');rect(558,273,3,3,'#d2c6a0');rect(559,274,1,1,'#526768');
+    // Breathing holes follow the visor's diagonal surface.
+    for(const [x,y] of [[539,277],[542,279],[545,281],[541,275],[545,278],[548,280]])rect(x,y,1,1,'#213e4b');
+    line(568,253,578,263,'#83978e');line(573,264,570,272,'#a4b2a0');
+    // Tiny wear: no broad white outlines, only moon-facing scratches.
+    for(const [x,y] of [[565,257],[565,260],[578,296],[575,300],[566,316],[550,351],[535,384],[623,396]]){rect(x,y,1,2,'#c0c1a6')}
+    // A small gold chain and clasp fastening the cloak.
+    line(578,291,588,294,'#b39a66');rect(579,290,3,3,'#c6ab72');rect(580,291,1,1,'#f0d49a');
+  },55);
+
+  // The sword is painted on top, with both hands visibly resting over its grip.
+  const sword=layer(()=>{
+    ellipse(518,411,12,2,'#102b34');
+    poly([[515,337],[520,336],[521,396],[518,412],[515,397]],'#1b3947');
+    poly([[516,339],[518,338],[518,408],[516,395]],'#c6cbb1');
+    poly([[518,339],[520,338],[520,395],[518,408]],'#6e9193');
+    line(516,343,516,395,'#e8ddbc');line(519,347,519,391,'#a4b7a8');
+    rect(516,326,4,11,'#2a3637');rect(516,326,1,10,'#8e8764');
+    for(let y=327;y<336;y+=3)line(517,y,519,y+1,'#b5a074');
+    // Crossguard curls gently upward; it sits below the lower gauntlet.
+    poly([[501,331],[504,332],[513,334],[523,334],[532,331],[535,331],[533,336],[523,338],[512,338],[502,335]],'#263c40');
+    line(503,332,513,335,'#b1ab80');line(514,335,523,335,'#d5c397');line(524,335,532,332,'#bcb389');
+    rect(501,331,3,3,'#b8ac7d');rect(531,330,3,3,'#c4b58a');rect(515,333,6,4,'#a79f78');rect(517,334,2,2,'#e4cea0');
+    // The pommel is mostly under the upper hand; its tip catches the moon.
+    rect(516,298,4,4,'#8b8e6c');rect(517,297,2,2,'#d0bd86');
+  },20);
+
+  const foreground=layer(()=>{
+    // Hundreds of grouped grass blades have a direction and a light-facing side.
+    for(let i=0;i<1120;i++){
+      const x=rand(-10,970),y=rand(386,548);const edge=Math.abs(x-500)/500;
+      if(y<474&&x>319&&x<699&&rnd()<.9)continue;
+      const h=rand(3,13)*(y>489?1.4:.8),dx=rand(-4,3),c=pick(['#142f34','#203c37','#385041','#47583f','#64704a','#77764b']);
+      line(x,y,x+dx,y-h,c);if(rnd()<.5)line(x,y,x+dx+3,y-h*.65,c);
+      if(rnd()<.18)rect(x+dx,y-h,1,2,'#9a8c56');
+    }
+    // Silhouetted fern fans at the corners; they frame rather than obscure.
+    function fern(x,y,len,ang,color){const ex=x+Math.cos(ang)*len,ey=y+Math.sin(ang)*len;line(x,y,ex,ey,color,1);for(let i=2;i<11;i++){const q=i/11,cx=x+(ex-x)*q,cy=y+(ey-y)*q,l=len*.20*(1-q)+2;line(cx,cy,cx-Math.sin(ang)*l-Math.cos(ang)*l*.5,cy+Math.cos(ang)*l-Math.sin(ang)*l*.5,color);line(cx,cy,cx+Math.sin(ang)*l-Math.cos(ang)*l*.5,cy-Math.cos(ang)*l-Math.sin(ang)*l*.5,color)}}
+    for(let i=0;i<19;i++){fern(91+rand(-27,27),541,rand(34,89),rand(-2.7,-.35),pick(['#0b2630','#102e33','#1b3938','#29433b']))}
+    for(let i=0;i<17;i++){fern(872+rand(-24,24),545,rand(40,96),rand(-2.6,-.6),pick(['#0a2530','#133137','#1d3939']))}
+    for(let i=0;i<90;i++){const x=rand(0,W),y=rand(515,550);line(x,y,x+rand(-10,10),y-rand(10,30),'#102b31')}
+    // Near-lens fallen branches and curled oak leaves.
+    branch([[0,500],[61,496],[117,511],[175,510],[222,529]],6,'#132d32');
+    branch([[87,503],[119,477],[137,473]],3,'#152f34');
+    leafCluster(41,489,35,['#3d4936','#5b5337','#79613c','#9b7745'],65);
+    leafCluster(151,509,26,['#3b4533','#6b5736','#8b693e'],46);
+    // A few unmistakable tiny mushrooms next to the root.
+    for(const [x,y,s] of [[814,443,1],[824,446,.8],[801,447,.65],[187,418,.7]]){rect(x,y-6*s,2*s,7*s,'#b0aa83');rect(x-4*s,y-7*s,10*s,2*s,'#8e5e45');rect(x-2*s,y-9*s,6*s,2*s,'#b27a54');rect(x-1*s,y-8*s,1,1,'#d5bd8d')}
+  },1743);
+
+  const motes=[],rain=[],leaves=[],ripples=[];seed=12345;
+  for(let i=0;i<40;i++)motes.push({x:rand(210,815),y:rand(210,437),a:rand(0,TAU),b:rand(0,TAU),k:pick([1,2,3]),bright:rand(.2,.8)});
+  for(let i=0;i<570;i++)rain.push({x:rand(-100,1060),y:rand(0,540),depth:rand(.15,1),phase:rnd(),k:pick([18,22,26,30,34])});
+  for(let i=0;i<35;i++)leaves.push({x:rand(0,W),phase:rnd(),y:rand(0,H),s:rand(.6,1.6),a:rand(0,TAU),k:pick([1,2,3]),c:pick(['#b39153','#a98046','#d1ab62','#7b7549','#9a6b41'])});
+  for(let i=0;i<48;i++)ripples.push({x:rand(172,858),y:rand(421,514),phase:rnd(),r:rand(3,9),k:pick([24,32,40,48])});
+
+  function cloak(t){
+    // Ripple coefficients all have integer periods of the master 48-second loop.
+    const a=Math.sin(t*TAU/6),b=Math.sin(t*TAU/8+1),c=Math.sin(t*TAU/12);
+    const flutter=px(a*2+b*1.5),edge=px(c*3);
+    poly([[586,289],[596,296],[606,318],[611,340],[625,363],[644+flutter,382],[649+flutter,394],[638+edge,400],[623,396],[609,398],[602,384],[594,361],[591,336],[586,318]],'#132e39');
+    poly([[588,292],[595,298],[602,320],[607,344],[618,366],[638+flutter,385],[642+flutter,393],[630,391],[618,394],[609,388],[602,367],[597,343],[594,318]],'#4e353c');
+    poly([[591,298],[597,315],[599,340],[609,366],[620+edge,389],[617,392],[609,383],[601,362],[596,342]],'#784847');
+    poly([[595,308],[600,324],[604,347],[618,374],[631+flutter,389],[635+flutter,392],[626,389],[613,375],[603,354],[599,338]],'#8a514a');
+    poly([[600,333],[606,350],[619,368],[637+flutter,383],[645+flutter,393],[636,390],[621,379],[611,363]],'#623d42');
+    poly([[590,317],[592,340],[599,368],[609,393],[612,395],[603,389],[596,369],[591,347]],'#2f323c');
+    line(596,318,601,341,'#9d6854');line(603,348,615,369,'#a06a53');
+    line(612,381,618,392,'#b48b61');line(623,393,630,391,'#a8875e');line(636+flutter,394,642+flutter,394,'#ad885a');
+    // Worn gold hem; tiny breaks keep it from looking freshly embroidered.
+    line(609,392,614,395,'#8b7155');line(616,395,622,394,'#8b7155');line(626,395,632,394,'#927351');
+    rect(639+flutter,395,2,3,'#4e3a3d');
+  }
+  function flames(t){
+    const candles=[[354,382,1],[463,391,.84],[346,400,.75],[87,239,.72]];
+    for(let i=0;i<candles.length;i++){
+      const [x,y,s]=candles[i],f=Math.sin(t*TAU/1.5+i*2)+.5*Math.sin(t*TAU/1.2+i),dx=px(f*.7);
+      glow(x,y-3,33*s,'rgba(229,154,57,.14)',.85+.10*f);glow(x,y-2,12*s,'rgba(255,171,65,.2)');
+      poly([[x-2,y],[x-3,y-3],[x-1+dx,y-7-px(f)],[x+dx,y-10-px(f)],[x+2+dx,y-5],[x+2,y-1]],'#bf763b');
+      poly([[x-1,y],[x-2,y-3],[x+dx,y-8],[x+1,y-4],[x+1,y]],'#f1bc65');rect(x,y-3,1,3,'#fff0b7');
+      g.globalAlpha=.12+.02*f;ellipse(x,y+19,13*s,2,'#d8ac58');g.globalAlpha=1;
+    }
+    glow(382,375,61,'rgba(209,159,73,.055)');
+  }
+  function mist(t,front=false){
+    const yy=front?427:343;
+    g.save();g.globalAlpha=front?.075:.11;
+    for(let i=0;i<(front?5:7);i++){
+      const x=-190+i*210+Math.sin(TAU*t/LOOP+i*1.7)*65;
+      const y=yy+Math.sin(TAU*t/24+i)*7+(i%3)*5;
+      const gr=g.createRadialGradient(x+160,y,0,x+160,y,180);gr.addColorStop(0,'#c3d0bb');gr.addColorStop(1,'rgba(123,164,159,0)');
+      g.fillStyle=gr;g.save();g.translate(0,y);g.scale(1,.065);g.fillRect(x,-180,360,360);g.restore();
+    }g.restore();
+  }
+  // Broad translucent pixel ribbons are rendered separately from the soft haze.
+  const fogRibbons=layer(()=>{
+    for(let i=0;i<31;i++){
+      const x=rand(-180,960),y=rand(325,365),w=rand(70,290);
+      g.globalAlpha=rand(.015,.07);rect(x,y,w,1,pick(['#b6cab8','#a8c2b5','#d7d2b4']));
+    }g.globalAlpha=1;
+  },122);
+  function waterAndRain(t,front){
+    if(!front){
+      for(let i=0;i<52;i++){
+        const a=i*3.91,y=311+mod(i*7.13,48),x=351+Math.sin(a)*((y-307)*1.8+3);
+        g.globalAlpha=.08+.08*Math.sin(t*TAU/6+a);rect(x+Math.sin(t*TAU/12+a)*3,y,2+(i%7),1,'#e0d0a1');
+      }g.globalAlpha=1;
+      return;
+    }
+    for(const p of ripples){
+      const age=mod(t/LOOP*p.k+p.phase,1);g.globalAlpha=(1-age)*.22;const r=age*p.r;
+      line(p.x-r,p.y,p.x-1,p.y,'#a8b6a5');line(p.x+1,p.y,p.x+r,p.y,'#a8b6a5');
+      if(age>.35){rect(p.x-r*.65,p.y-1,Math.max(1,r*.5),1,'#718e89');rect(p.x+r*.3,p.y+1,Math.max(1,r*.5),1,'#718e89')}
+    }g.globalAlpha=1;
+  }
+  function rainfall(t,near){
+    for(const p of rain){if((p.depth>.73)!==near)continue;
+      const f=mod(p.phase+t/LOOP*p.k,1),x=mod(p.x-f*100,1100)-65,y=f*620-50;
+      const l=near?4+p.depth*6:2+p.depth*4;
+      g.globalAlpha=near?.10+p.depth*.10:.045+p.depth*.07;
+      line(x,y,x-2*p.depth,y+l,near?'#a4b8b1':'#b1c4b7');
+      if(y>385&&y<515&&near&&f>.7&&p.phase<.14){rect(x-2,y+l,2,1,'#bfd1c3')}
+    }g.globalAlpha=1;
+  }
+  function fallingLeaves(t,front){
+    for(const p of leaves){if((p.s>1.1)!==front)continue;
+      const f=mod(p.phase+t/LOOP*p.k,1),y=-20+f*590;
+      const x=mod(p.x+f*165+Math.sin(f*TAU*3+p.a)*23,W+60)-30;
+      const twist=Math.sin(f*TAU*8+p.a),w=Math.max(1,Math.abs(twist)*4*p.s);
+      g.globalAlpha=front?.8:.46;
+      rect(x,y,w,2*p.s,p.c);rect(x+(twist>0?1:-1),y-1,Math.max(1,w-1),1,p.c);
+      if(front){rect(x,y,1,1,'#e0b871');line(x,y+1,x-2,y+3,'#6c6344')}
+    }g.globalAlpha=1;
+  }
+  function fireflies(t){
+    for(const p of motes){
+      const a=TAU*t/LOOP*p.k+p.a,x=p.x+Math.sin(a)*12+Math.sin(a*2+p.b)*3,y=p.y+Math.cos(a+p.b)*7;
+      const b=Math.pow(Math.max(0,Math.sin(a*2+p.b)),4)*p.bright;
+      if(b<.04)continue;
+      glow(x,y,7,'rgba(198,184,98,.14)',b);g.globalAlpha=b;rect(x,y,1,1,'#e2d08a');g.globalAlpha=1;
+    }
+  }
+  function clothAtGrave(t){
+    const q=px(Math.sin(t*TAU/8)*2);
+    poly([[447,340],[449,348],[450+q,356],[454+q,366],[450+q,363],[447,354]],'#334c53');line(450+q,355,453+q,363,'#617174');
+  }
+  function rays(t){
+    g.save();g.globalCompositeOperation='screen';
+    const a=.017+.004*Math.sin(t*TAU/24);
+    g.globalAlpha=a;
+    poly([[335,129],[358,128],[650,447],[572,447]],'#c9cdb0');
+    g.globalAlpha=a*.8;poly([[342,128],[351,128],[505,416],[476,413]],'#d7d5b3');
+    g.globalAlpha=a*.5;poly([[365,132],[372,130],[778,452],[714,451]],'#c7d0b7');g.restore();
+  }
+  // Gentle shafts and a filmic darkening are prepainted to avoid per-frame filters.
+  const finish=layer(()=>{
+    const gr=g.createLinearGradient(0,425,0,540);gr.addColorStop(0,'rgba(6,18,29,0)');gr.addColorStop(1,'rgba(5,16,25,.47)');g.fillStyle=gr;g.fillRect(0,425,W,115);
+    const top=g.createLinearGradient(0,0,0,96);top.addColorStop(0,'rgba(6,13,24,.2)');top.addColorStop(1,'rgba(6,13,24,0)');g.fillStyle=top;g.fillRect(0,0,W,96);
+  });
+
+  let running=!matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let elapsed=0,last=0,frame=0;
+  function paint(t){
+    g=out;g.globalAlpha=1;g.drawImage(sky,0,0);clouds(t);g.drawImage(distance,0,0);waterAndRain(t,false);
+    mist(t,false);g.drawImage(fogRibbons,px(Math.sin(t*TAU/LOOP)*22),0);
+    g.drawImage(terrace,0,0);g.drawImage(trees,0,0);g.drawImage(ruins,0,0);
+    rainfall(t,false);fallingLeaves(t,false);
+    // Long, very faint cast shadows unify all characters with the ground plane.
+    g.globalAlpha=.17;poly([[414,394],[423,395],[491,463],[464,463]],'#071d29');poly([[552,399],[585,396],[693,452],[631,444]],'#071d29');g.globalAlpha=1;
+    g.drawImage(memorial,0,0);clothAtGrave(t);cloak(t);g.drawImage(knight,0,0);g.drawImage(sword,0,0);g.drawImage(stillLife,0,0);
+    flames(t);rays(t);waterAndRain(t,true);fireflies(t);mist(t,true);
+    g.drawImage(foreground,0,0);fallingLeaves(t,true);rainfall(t,true);g.drawImage(finish,0,0);
+  }
+  function tick(ms){if(last&&running&&document.visibilityState==='visible')elapsed+=Math.min((ms-last)/1000,.06);last=ms;if(running||!frame)paint(mod(elapsed,LOOP));frame++;requestAnimationFrame(tick)}
+  function updatePause(){document.getElementById('pauseIcon').setAttribute('d',running?'M5 3v10M11 3v10':'M5 3l8 5-8 5Z');document.getElementById('pause').setAttribute('aria-label',running?'暂停动画':'继续动画')}
+  function togglePause(){running=!running;updatePause();wake()}
+  async function fullscreen(){try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen()}catch(e){console.info('Fullscreen is unavailable in this browser context.')}wake()}
+  let idle;
+  function wake(){document.body.classList.add('awake');clearTimeout(idle);idle=setTimeout(()=>document.body.classList.remove('awake'),2800)}
+  document.addEventListener('pointermove',wake,{passive:true});document.addEventListener('pointerdown',wake,{passive:true});
+  document.getElementById('pause').addEventListener('click',togglePause);document.getElementById('fullscreen').addEventListener('click',fullscreen);
+  document.getElementById('text').addEventListener('click',()=>{document.body.classList.toggle('clean');wake()});
+  document.addEventListener('keydown',e=>{if(e.target instanceof HTMLButtonElement)return;if(e.code==='Space'){e.preventDefault();togglePause()}else if(e.code==='KeyF'){fullscreen()}else if(e.code==='KeyH'){document.body.classList.toggle('clean');wake()}});
+  document.addEventListener('visibilitychange',()=>{last=0});
+  // A deterministic hook for visual checks and exact seamless-loop verification.
+  window.Vigil={render(t=0){paint(mod(t,LOOP))},get time(){return elapsed},get running(){return running},setPaused(v=true){running=!v;updatePause()},loopDuration:LOOP,width:W,height:H};
+  updatePause();wake();requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
