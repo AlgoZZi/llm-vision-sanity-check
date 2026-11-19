@@ -143,6 +143,14 @@ const works = [
     description: "一段以“最后的守夜”为题的 Canvas 画面。",
     hint: "可通过“新窗口打开”获得更大的展示空间。",
   },
+  {
+    id: "shiomi-harbor-sunshower",
+    model: "Claude Opus 5.5",
+    file: "汐見漁港 · 太阳雨.html",
+    title: "汐見漁港 · 太阳雨",
+    description: "渔港里的太阳雨，由 Opus 5.5 Max 生成。",
+    hint: "可通过“新窗口打开”获得更大的展示空间。",
+  },
 ];
 
 const elements = {
