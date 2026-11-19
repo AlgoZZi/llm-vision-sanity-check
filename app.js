@@ -83,7 +83,7 @@ const works = [
     id: "ocean-under-dome-61s-k",
     model: "GPT-6.1 Sol",
     file: "穹顶下的海洋-6.1s-K.html",
-    title: "穹顶下的海洋",
+    title: "穹顶下的海洋 · Ⅰ",
     description: "穹顶之下，展现一片海洋景致。",
     hint: "Three.js 已内置，可通过“新窗口打开”获得更大的展示空间。",
   },
@@ -91,9 +91,25 @@ const works = [
     id: "ocean-under-dome",
     model: "GPT-6.1 Sol",
     file: "穹顶下的海洋.html",
-    title: "穹顶下的海洋",
+    title: "穹顶下的海洋 · Ⅱ",
     description: "在穹顶之下，走进一片海洋世界。",
     hint: "Three.js 已内置，可通过“新窗口打开”获得更大的展示空间。",
+  },
+  {
+    id: "sunshower-harbor-embankment",
+    model: "GPT-6.1 Sol",
+    file: "太阳雨渔港-堤岸.html",
+    title: "太阳雨渔港 · 堤岸",
+    description: "太阳雨中的小渔港，沿堤岸展开一幅港口景致。",
+    hint: "可拖动旋转视角。此作品需要联网加载 Three.js 与 OrbitControls。",
+  },
+  {
+    id: "sunshower-harbor-bay",
+    model: "GPT-6.1 Sol",
+    file: "太阳雨渔港-港湾.html",
+    title: "太阳雨渔港 · 港湾",
+    description: "太阳雨中的小渔港。Token：13M。",
+    hint: "可通过“新窗口打开”获得更大的展示空间。",
   },
   {
     id: "axolotl-season-ride",
@@ -172,7 +188,7 @@ const elements = {
 const buttons = new Map();
 const modelGroups = new Map();
 const providers = [
-  { name: "Anthropic", models: ["Claude Sonnet 5.5", "Claude Opus 5.5"] },
+  { name: "Anthropic", models: ["Claude Opus 5.5", "Claude Sonnet 5.5"] },
   { name: "OpenAI", models: ["GPT-6.1 Sol", "GPT-6.2 Sol"] },
 ];
 let currentWorkId = null;
@@ -341,7 +357,8 @@ function showWorkFromHash() {
     id = "";
   }
 
-  const work = works.find((item) => item.id === id) || works[0];
+  const work = works.find((item) => item.id === id)
+    || works.find((item) => item.id === "shiomi-harbor-sunshower");
   showWork(work);
 }
 
