@@ -1,0 +1,2097 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>初雪蓝调时刻 · 山间温泉旅馆与索道小站</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0c1328; }
+  canvas { display: block; width: 100%; height: 100%; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ==================== 渲染器、场景与相机 ====================
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.08;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0f1833);
+scene.fog = new THREE.FogExp2(0x182347, 0.0115);
+
+const camera = new THREE.PerspectiveCamera(36, window.innerWidth / window.innerHeight, 0.2, 260);
+camera.position.set(22.5, 16.5, 24.5);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.target.set(0, 2.2, 0.2);
+controls.minDistance = 8.5;
+controls.maxDistance = 58;
+controls.maxPolarAngle = Math.PI * 0.56;
+controls.minPolarAngle = 0.14;
+
+// ==================== 三渲二材质与轮廓线系统 ====================
+function createGradientMap(stops) {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 1;
+  const ctx = c.getContext('2d');
+  for (let i = 0; i < stops.length; i++) {
+    const start = Math.floor(stops[i][0] * 256);
+    const end = i < stops.length - 1 ? Math.floor(stops[i + 1][0] * 256) : 256;
+    ctx.fillStyle = stops[i][1];
+    ctx.fillRect(start, 0, end - start, 1);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.minFilter = THREE.NearestFilter;
+  tex.magFilter = THREE.NearestFilter;
+  tex.generateMipmaps = false;
+  return tex;
+}
+
+const gradSoft = createGradientMap([[0, '#445282'], [0.32, '#7d92c4'], [0.66, '#cbdcf5'], [0.88, '#ffffff']]);
+const gradWarm = createGradientMap([[0, '#423659'], [0.35, '#8f7288'], [0.7, '#d8c3ba'], [0.9, '#ffffff']]);
+const gradSnow = createGradientMap([[0, '#5a6da8'], [0.28, '#8ba6db'], [0.62, '#d4e9fa'], [0.85, '#f4fbff']]);
+
+const outlineMat = new THREE.MeshBasicMaterial({ color: 0x161b33, side: THREE.BackSide });
+const outlineThinMat = new THREE.MeshBasicMaterial({ color: 0x1e2440, side: THREE.BackSide });
+
+function addOutline(mesh, thickness = 0.028, thin = false) {
+  const ol = new THREE.Mesh(mesh.geometry, thin ? outlineThinMat : outlineMat);
+  ol.scale.setScalar(1 + thickness);
+  ol.renderOrder = -1;
+  mesh.add(ol);
+  return mesh;
+}
+
+function toonMat(color, opts = {}) {
+  const m = new THREE.MeshToonMaterial({
+    color,
+    gradientMap: opts.snow ? gradSnow : (opts.warm ? gradWarm : gradSoft),
+    emissive: opts.emissive || 0x000000,
+    emissiveIntensity: opts.emissiveIntensity ?? 1.0,
+    transparent: opts.transparent || false,
+    opacity: opts.opacity ?? 1.0,
+    side: opts.side ?? THREE.FrontSide,
+    map: opts.map || null,
+  });
+  return m;
+}
+
+// 带次表面淡青透光与蓝紫阴影的积雪着色器材质
+const snowShaderMat = new THREE.MeshToonMaterial({
+  color: 0xe6f3ff,
+  gradientMap: gradSnow,
+});
+snowShaderMat.onBeforeCompile = (shader) => {
+  shader.fragmentShader = shader.fragmentShader.replace(
+    '#include <dithering_fragment>',
+    `
+    // 积雪次表面淡青透光（菲涅尔边缘）与蓝紫冷阴影润色
+    vec3 vDir = normalize(vViewPosition);
+    float rim = pow(1.0 - clamp(dot(normalize(vNormal), vDir), 0.0, 1.0), 2.4);
+    gl_FragColor.rgb += vec3(0.14, 0.30, 0.42) * rim * 0.55;
+    float lum = dot(gl_FragColor.rgb, vec3(0.299, 0.587, 0.114));
+    vec3 coolShadowTint = vec3(0.30, 0.38, 0.72);
+    gl_FragColor.rgb = mix(gl_FragColor.rgb * 0.75 + coolShadowTint * 0.25, gl_FragColor.rgb, smoothstep(0.18, 0.62, lum));
+    #include <dithering_fragment>
+    `
+  );
+};
+
+// ==================== 共享基础材质库 ====================
+const M = {
+  snow: snowShaderMat,
+  snowDeep: toonMat(0xbcd3f5, { snow: true }),
+  rock: toonMat(0x4a5b7a),
+  rockDark: toonMat(0x2b344d),
+  rockVolcanic: toonMat(0x1f2436),
+  woodDark: toonMat(0x4b352c, { warm: true }),
+  woodMid: toonMat(0x75523d, { warm: true }),
+  woodLight: toonMat(0xb68a63, { warm: true }),
+  woodTimber: toonMat(0x5e4031, { warm: true }),
+  vermilion: toonMat(0xc8372d, { warm: true }),
+  vermilionDark: toonMat(0x8c2321, { warm: true }),
+  roofTile: toonMat(0x36415c),
+  shojiGlow: new THREE.MeshBasicMaterial({ color: 0xffcf7a }),
+  shojiSoft: toonMat(0xffd58b, { emissive: 0xffa640, emissiveIntensity: 0.78 }),
+  lanternRed: toonMat(0xe84836, { emissive: 0xff6229, emissiveIntensity: 0.92 }),
+  lanternWarm: toonMat(0xffb85c, { emissive: 0xff942e, emissiveIntensity: 1.0 }),
+  metalDark: toonMat(0x3a4359),
+  metalSteel: toonMat(0x7888a6),
+  straw: toonMat(0xc4a462, { warm: true }),
+  bamboo: toonMat(0x6c8754, { warm: true }),
+  pine: toonMat(0x28474c),
+  pineDark: toonMat(0x1c343d),
+  tatami: toonMat(0xb8b074, { warm: true }),
+  ice: new THREE.MeshPhysicalMaterial({
+    color: 0xaee6ff,
+    emissive: 0x3b6ea5,
+    emissiveIntensity: 0.22,
+    roughness: 0.14,
+    metalness: 0.05,
+    transmission: 0.62,
+    transparent: true,
+    opacity: 0.82,
+    ior: 1.31
+  }),
+  glassMist: new THREE.MeshPhysicalMaterial({
+    color: 0xcbe8ff,
+    roughness: 0.25,
+    transparent: true,
+    opacity: 0.42
+  }),
+  norenBlue: toonMat(0x1e3561),
+  gold: toonMat(0xe2b14a, { warm: true }),
+  redCloth: toonMat(0xd63638, { warm: true }),
+  whiteCeramic: toonMat(0xf2efe9, { warm: true }),
+  charcoalGlow: new THREE.MeshBasicMaterial({ color: 0xff5a1f }),
+  crystalPink: toonMat(0xf4b6c9, { emissive: 0xd9739c, emissiveIntensity: 0.25 }),
+};
+
+// 通用网格构建器
+function mkBox(w, h, d, mat, pos = [0, 0, 0], outline = 0.03) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  m.position.set(pos[0], pos[1], pos[2]);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  if (outline > 0) addOutline(m, outline, outline < 0.025);
+  return m;
+}
+function mkCyl(rt, rb, h, seg, mat, pos = [0, 0, 0], outline = 0.03) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat);
+  m.position.set(pos[0], pos[1], pos[2]);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  if (outline > 0) addOutline(m, outline, outline < 0.025);
+  return m;
+}
+function mkSphere(r, ws, hs, mat, pos = [0, 0, 0], outline = 0.028) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r, ws, hs), mat);
+  m.position.set(pos[0], pos[1], pos[2]);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  if (outline > 0) addOutline(m, outline, outline < 0.025);
+  return m;
+}
+
+// ==================== 蓝调时刻灯光系统 ====================
+const hemiLight = new THREE.HemisphereLight(0x5274c4, 0x262856, 0.95);
+scene.add(hemiLight);
+
+const moonDir = new THREE.DirectionalLight(0x9ab8ff, 1.35);
+moonDir.position.set(-18, 28, -14);
+moonDir.castShadow = true;
+moonDir.shadow.mapSize.set(2048, 2048);
+moonDir.shadow.camera.near = 2;
+moonDir.shadow.camera.far = 65;
+const sc = 16;
+moonDir.shadow.camera.left = -sc;
+moonDir.shadow.camera.right = sc;
+moonDir.shadow.camera.top = sc;
+moonDir.shadow.camera.bottom = -sc;
+moonDir.shadow.bias = -0.0005;
+scene.add(moonDir);
+
+// 地平线残留暖粉夕照背光
+const sunsetRim = new THREE.DirectionalLight(0xf28d8d, 0.45);
+sunsetRim.position.set(22, 6, -24);
+scene.add(sunsetRim);
+
+// 收集需要呼吸式闪烁的暖光源
+const flickerLights = [];
+function addWarmLight(x, y, z, color = 0xffa042, intensity = 3.2, distance = 9, phase = Math.random() * 10) {
+  const l = new THREE.PointLight(color, intensity, distance, 1.65);
+  l.position.set(x, y, z);
+  scene.add(l);
+  flickerLights.push({ light: l, base: intensity, phase });
+  return l;
+}
+
+// ==================== 蓝调时刻穹顶、星空、弯月、流星与远山 ====================
+const skyGeo = new THREE.SphereGeometry(125, 40, 28);
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide,
+  depthWrite: false,
+  uniforms: { uTime: { value: 0 } },
+  vertexShader: `
+    varying vec3 vWorldPos;
+    void main() {
+      vec4 wp = modelMatrix * vec4(position, 1.0);
+      vWorldPos = wp.xyz;
+      gl_Position = projectionMatrix * viewMatrix * wp;
+    }
+  `,
+  fragmentShader: `
+    varying vec3 vWorldPos;
+    void main() {
+      vec3 dir = normalize(vWorldPos);
+      float h = clamp(dir.y, -0.25, 1.0);
+      vec3 cZenith = vec3(0.055, 0.088, 0.22);
+      vec3 cMid = vec3(0.14, 0.17, 0.38);
+      vec3 cDusk = vec3(0.36, 0.24, 0.44);
+      vec3 cHorizon = vec3(0.86, 0.50, 0.46);
+      vec3 cBelow = vec3(0.05, 0.07, 0.16);
+      vec3 col = mix(cDusk, cMid, smoothstep(0.04, 0.32, h));
+      col = mix(col, cZenith, smoothstep(0.28, 0.78, h));
+      // 地平线残留一线暖粉橘（偏向北方/后方天际）
+      float sunSide = smoothstep(-0.3, 0.85, -dir.z * 0.75 + dir.x * 0.45);
+      float horizonBand = exp(-pow((h - 0.025) * 11.0, 2.0));
+      col = mix(col, cHorizon, horizonBand * (0.42 + 0.55 * sunSide));
+      col = mix(cBelow, col, smoothstep(-0.18, 0.02, h));
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `
+});
+scene.add(new THREE.Mesh(skyGeo, skyMat));
+
+// 闪烁星空
+const starCount = 420;
+const starPos = new Float32Array(starCount * 3);
+const starPhase = new Float32Array(starCount);
+const starSize = new Float32Array(starCount);
+for (let i = 0; i < starCount; i++) {
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(0.15 + Math.random() * 0.85);
+  const r = 108;
+  starPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+  starPos[i * 3 + 1] = r * Math.cos(phi);
+  starPos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+  starPhase[i] = Math.random() * Math.PI * 2;
+  starSize[i] = 1.6 + Math.random() * 2.8;
+}
+const starGeo = new THREE.BufferGeometry();
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+starGeo.setAttribute('aPhase', new THREE.BufferAttribute(starPhase, 1));
+starGeo.setAttribute('aSize', new THREE.BufferAttribute(starSize, 1));
+const starMat = new THREE.ShaderMaterial({
+  transparent: true,
+  depthWrite: false,
+  uniforms: { uTime: { value: 0 } },
+  vertexShader: `
+    attribute float aPhase;
+    attribute float aSize;
+    varying float vTwinkle;
+    uniform float uTime;
+    void main() {
+      vTwinkle = 0.45 + 0.55 * sin(uTime * 1.8 + aPhase);
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      gl_PointSize = aSize * (260.0 / -mv.z) * (0.8 + 0.3 * vTwinkle);
+      gl_Position = projectionMatrix * mv;
+    }
+  `,
+  fragmentShader: `
+    varying float vTwinkle;
+    void main() {
+      float d = length(gl_PointCoord - 0.5);
+      if (d > 0.5) discard;
+      float alpha = smoothstep(0.5, 0.05, d) * vTwinkle;
+      gl_FragColor = vec4(0.92, 0.96, 1.0, alpha);
+    }
+  `
+});
+scene.add(new THREE.Points(starGeo, starMat));
+
+// 细弯月（山顶背后深靛蓝星空）
+const moonGroup = new THREE.Group();
+moonGroup.position.set(-28, 34, -68);
+const moonCanvas = document.createElement('canvas');
+moonCanvas.width = 128; moonCanvas.height = 128;
+const mctx = moonCanvas.getContext('2d');
+mctx.clearRect(0, 0, 128, 128);
+mctx.fillStyle = '#fff5cf';
+mctx.beginPath(); mctx.arc(64, 64, 42, 0, Math.PI * 2); mctx.fill();
+mctx.globalCompositeOperation = 'destination-out';
+mctx.beginPath(); mctx.arc(78, 56, 38, 0, Math.PI * 2); mctx.fill();
+const moonSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+  map: new THREE.CanvasTexture(moonCanvas), transparent: true, fog: false
+}));
+moonSprite.scale.set(9.5, 9.5, 1);
+moonGroup.add(moonSprite);
+scene.add(moonGroup);
+
+// 流星对象
+const meteorGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(-8, 3.2, 0)]);
+const meteorMat = new THREE.LineBasicMaterial({ color: 0xeaf4ff, transparent: true, opacity: 0, fog: false });
+const meteorLine = new THREE.Line(meteorGeo, meteorMat);
+scene.add(meteorLine);
+const meteorState = { active: false, t: 0, dur: 1.1, next: 4.5, start: new THREE.Vector3(), dir: new THREE.Vector3() };
+
+// 空气透视远山与缓慢流动的山谷夜雾
+const farMountainGroup = new THREE.Group();
+const mountainRings = [
+  { r: 52, count: 14, hMin: 11, hMax: 21, col: 0x1d294d, yOff: -9 },
+  { r: 78, count: 16, hMin: 18, hMax: 32, col: 0x263460, yOff: -12 },
+  { r: 102, count: 18, hMin: 24, hMax: 42, col: 0x33406e, yOff: -14 },
+];
+mountainRings.forEach((ring, ri) => {
+  const mat = new THREE.MeshBasicMaterial({ color: ring.col, fog: true });
+  for (let i = 0; i < ring.count; i++) {
+    const a = (i / ring.count) * Math.PI * 2 + ri * 0.4;
+    const h = ring.hMin + ((i * 37 + ri * 19) % 10) / 10 * (ring.hMax - ring.hMin);
+    const rad = 14 + ((i * 23) % 9);
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(rad, h, 5), mat);
+    cone.position.set(Math.cos(a) * ring.r, ring.yOff + h * 0.45, Math.sin(a) * ring.r);
+    cone.rotation.y = a;
+    farMountainGroup.add(cone);
+  }
+});
+scene.add(farMountainGroup);
+
+// 远谷夜雾层
+const valleyMists = [];
+const mistCanvas = document.createElement('canvas');
+mistCanvas.width = 128; mistCanvas.height = 128;
+const mistCtx = mistCanvas.getContext('2d');
+const mg = mistCtx.createRadialGradient(64, 64, 6, 64, 64, 64);
+mg.addColorStop(0, 'rgba(130, 165, 225, 0.24)');
+mg.addColorStop(0.55, 'rgba(95, 130, 195, 0.10)');
+mg.addColorStop(1, 'rgba(60, 85, 150, 0.0)');
+mistCtx.fillStyle = mg; mistCtx.fillRect(0, 0, 128, 128);
+const mistTex = new THREE.CanvasTexture(mistCanvas);
+for (let i = 0; i < 16; i++) {
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: mistTex, transparent: true, depthWrite: false, opacity: 0.42, fog: false
+  }));
+  const a = (i / 16) * Math.PI * 2;
+  const dist = 28 + (i % 3) * 10;
+  sp.position.set(Math.cos(a) * dist, -2.5 + (i % 4) * 1.4, Math.sin(a) * dist);
+  sp.scale.set(24 + (i % 3) * 6, 7.5, 1);
+  scene.add(sp);
+  valleyMists.push({ sprite: sp, angle: a, dist, speed: 0.012 + (i % 3) * 0.005, baseY: sp.position.y });
+}
+
+// ==================== 展柜主根组 ====================
+const diorama = new THREE.Group();
+scene.add(diorama);
+
+// ==================== 模块1：正方形底座与精密地质/建筑剖面 ====================
+const BASE_SIZE = 16; // X: -8..8, Z: -8..8
+const BASE_BOT = -3.4;
+
+// 展柜微缩底座黑胡桃木框边（底部装饰镶边，突出玻璃展柜精致摆件感）
+const plinthFrame = mkBox(BASE_SIZE + 0.48, 0.42, BASE_SIZE + 0.48, M.rockVolcanic, [0, BASE_BOT - 0.21, 0], 0.015);
+diorama.add(plinthFrame);
+const brassTrim = mkBox(BASE_SIZE + 0.36, 0.08, BASE_SIZE + 0.36, M.gold, [0, BASE_BOT + 0.02, 0], 0);
+diorama.add(brassTrim);
+
+// 共享动态集合
+const animKoi = [];
+const animBubbles = [];
+const animSteam = [];
+const animSway = [];
+const animSparks = [];
+const animSnowFlakes = [];
+const animEaveSnow = [];
+
+// ----- 1.1 左半侧山体剖面（索道站与山坡高地：X -8..0.6） -----
+// 底层灰蓝色安山岩基座（左半）
+const andesiteCore = mkBox(8.6, 5.4, BASE_SIZE, M.rock, [-3.7, -0.7, 0], 0.008);
+diorama.add(andesiteCore);
+// 左后高台山坡（杉树林与小祠区域：X -8..-0.2, Z -8..-1.5）
+const upperHill = mkBox(8.2, 3.0, 6.8, M.rock, [-3.9, 3.3, -4.6], 0.01);
+diorama.add(upperHill);
+// 山顶小祠缓坡台阶
+const peakSnow = mkBox(8.3, 0.72, 6.9, M.snow, [-3.9, 5.05, -4.6], 0.012);
+diorama.add(peakSnow);
+
+// 索道站平台雪面（左前：X -8..0.5, Z -1.6..8）
+const stationDeckSnow = mkBox(8.6, 0.55, 9.6, M.snow, [-3.7, 2.22, 3.2], 0.012);
+diorama.add(stationDeckSnow);
+// 斜坡过渡雪坡（连接山顶与站台）
+const midSlope = mkBox(8.1, 1.35, 2.8, M.snow, [-3.9, 3.35, -1.2], 0.012);
+midSlope.rotation.x = 0.42;
+diorama.add(midSlope);
+
+// 索道侧剖面细节（X = -8 左侧壁与 Z = 8 左前壁）
+// 岩层条纹（层理安山岩）
+for (let i = 0; i < 4; i++) {
+  const band = mkBox(0.16, 0.55 + (i % 2) * 0.2, BASE_SIZE - 0.12, i % 2 === 0 ? M.rockDark : toonMat(0x5b6f94), [-8.02, -2.5 + i * 1.15, 0], 0);
+  diorama.add(band);
+}
+// 层层压实的积雪剖面（左壁与前左壁顶部白色/淡青蓝压实雪层）
+const snowCutL1 = mkBox(0.22, 0.34, 9.5, M.snow, [-8.04, 2.34, 3.2], 0);
+const snowCutL2 = mkBox(0.20, 0.24, 9.5, M.snowDeep, [-8.03, 2.04, 3.2], 0);
+const snowCutL3 = mkBox(0.22, 0.52, 6.8, M.snow, [-8.04, 5.18, -4.6], 0);
+const snowCutL4 = mkBox(0.20, 0.30, 6.8, M.snowDeep, [-8.03, 4.78, -4.6], 0);
+diorama.add(snowCutL1, snowCutL2, snowCutL3, snowCutL4);
+
+// 冻结的冰晶裂隙（在 X=-8 左侧切面上发光冰脉）
+const iceCrackPoints = [
+  [-8.06, 1.2, 4.6, 0.45, 0.14, 1.9, 0.25],
+  [-8.06, 0.5, 3.2, 0.32, 0.12, 1.5, -0.35],
+  [-8.06, -0.3, 1.8, 0.38, 0.14, 2.1, 0.18],
+  [-8.06, 2.8, -3.5, 0.42, 0.15, 2.4, -0.28],
+  [-8.06, 1.4, -5.2, 0.35, 0.13, 1.7, 0.42],
+];
+iceCrackPoints.forEach(([x, y, z, h, w, d, rotX]) => {
+  const crack = mkBox(w, h, d, M.ice, [x, y, z], 0);
+  crack.rotation.x = rotX;
+  diorama.add(crack);
+});
+
+// 悬垂着冰锥的岩缝（左前切面 X=-8, Z=1.2..3.6）
+const rockFissure = mkBox(0.32, 0.72, 2.6, M.rockVolcanic, [-8.01, 0.85, 2.4], 0);
+diorama.add(rockFissure);
+for (let i = 0; i < 9; i++) {
+  const icH = 0.28 + (i % 3) * 0.16;
+  const ic = new THREE.Mesh(new THREE.ConeGeometry(0.055, icH, 5), M.ice);
+  ic.rotation.x = Math.PI;
+  ic.position.set(-8.08, 1.15 - icH * 0.5, 1.3 + i * 0.27);
+  diorama.add(ic);
+}
+
+// 半埋的松树根系（沿左侧山坡剖面裸露的树根）
+for (let i = 0; i < 6; i++) {
+  const root = mkCyl(0.08, 0.03, 1.4 + (i % 3) * 0.45, 6, M.woodDark, [-8.06, 3.9 - i * 0.22, -2.5 - i * 0.85], 0.02);
+  root.rotation.x = 0.45 + (i % 2) * 0.35;
+  root.rotation.z = 0.12;
+  diorama.add(root);
+}
+
+// ----- 1.2 右半侧温泉旅馆层叠地基、架空木地台榫卯、热水管道与温泉池剖面 -----
+// 右半底层岩土（X 0.6..8, Z -8..8），留出右前角露天汤池切口（X 2.2..7.9, Z 2.2..7.9）
+const innSoilBack = mkBox(7.5, 3.6, 10.2, M.rockDark, [4.25, -1.6, -2.9], 0.008);
+diorama.add(innSoilBack);
+// 右前汤池外侧地基岩层
+const innSoilLeft = mkBox(2.0, 3.2, 5.8, M.rockDark, [1.5, -1.8, 5.1], 0.008);
+diorama.add(innSoilLeft);
+// 温泉池底基岩（下方保留地热泉眼与管道空间）
+const poolSubFloor = mkBox(5.6, 1.45, 5.6, M.rockDark, [5.15, -2.65, 5.15], 0.008);
+diorama.add(poolSubFloor);
+
+// 旅馆庭院雪地与石板底层（Y = 0.22）
+const courtyardBack = mkBox(7.6, 0.32, 10.3, M.snow, [4.22, 0.32, -2.85], 0.01);
+diorama.add(courtyardBack);
+const courtyardWalk = mkBox(2.2, 0.30, 5.8, M.snow, [1.55, 0.12, 5.1], 0.01);
+diorama.add(courtyardWalk);
+
+// 架空木地台的榫卯结构（旅馆右侧剖面 X = 8.0 处清晰可见的立柱、穿枋、木楔）
+const mortiseGroup = new THREE.Group();
+for (let i = 0; i < 5; i++) {
+  const zPos = -7.2 + i * 2.15;
+  // 垂直木柱与石础
+  mortiseGroup.add(mkBox(0.32, 0.24, 0.32, M.rock, [7.88, -1.05, zPos], 0.02));
+  mortiseGroup.add(mkBox(0.24, 1.75, 0.24, M.woodTimber, [7.88, -0.05, zPos], 0.02));
+  // 凸出的榫头与横梁卯口
+  mortiseGroup.add(mkBox(0.34, 0.16, 0.14, M.woodLight, [7.96, 0.45, zPos], 0.02));
+  mortiseGroup.add(mkBox(0.30, 0.12, 0.12, M.woodLight, [7.95, -0.35, zPos], 0.02));
+}
+// 纵向穿枋与托梁
+mortiseGroup.add(mkBox(0.20, 0.22, 9.2, M.woodDark, [7.92, 0.62, -2.9], 0.02));
+mortiseGroup.add(mkBox(0.18, 0.16, 9.2, M.woodMid, [7.91, -0.35, -2.9], 0.02));
+// 斜撑木方
+for (let i = 0; i < 4; i++) {
+  const brace = mkBox(0.12, 0.12, 2.0, M.woodMid, [7.90, 0.12, -6.1 + i * 2.15], 0.02);
+  brace.rotation.x = i % 2 === 0 ? 0.46 : -0.46;
+  mortiseGroup.add(brace);
+}
+diorama.add(mortiseGroup);
+
+// 包着稻草保温的热水管道（沿右侧与前侧切面从地热泉眼通向温泉池与旅馆）
+const pipeGroup = new THREE.Group();
+const pipe1 = mkCyl(0.16, 0.16, 5.4, 10, M.straw, [7.95, -1.65, -0.5], 0.02);
+pipe1.rotation.x = Math.PI / 2;
+pipeGroup.add(pipe1);
+// 管道上捆绑的深色麻绳环
+for (let i = 0; i < 12; i++) {
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.025, 6, 12), M.woodDark);
+  ring.position.set(7.95, -1.65, -3.0 + i * 0.45);
+  pipeGroup.add(ring);
+}
+// 弯管接向地热泉眼
+const pipe2 = mkCyl(0.14, 0.14, 2.2, 10, M.straw, [7.95, -2.35, 2.3], 0.02);
+pipe2.rotation.x = 0.65;
+pipeGroup.add(pipe2);
+// 冒着细微白气的地热泉眼（右侧切面下方 X=8.0, Y=-2.45, Z=1.8）
+const springVent = mkSphere(0.55, 10, 8, M.rockVolcanic, [7.82, -2.45, 1.85], 0.02);
+springVent.scale.set(0.5, 0.85, 1.2);
+pipeGroup.add(springVent);
+const springGlow = mkSphere(0.32, 10, 8, toonMat(0x7be0e8, { emissive: 0x4fc3d9, emissiveIntensity: 0.75 }), [7.96, -2.45, 1.85], 0);
+springGlow.scale.set(0.35, 0.7, 0.9);
+pipeGroup.add(springGlow);
+diorama.add(pipeGroup);
+
+// ----- 1.3 右前角半透明乳青色温泉池剖面、卵石、粉色矿物结晶、气泡与锦鲤 -----
+// 池底范围：X 2.6..7.85, Z 2.6..7.85, 池底 Y = -1.85, 水面 Y = 0.05
+const poolBasinFloor = mkBox(5.2, 0.16, 5.2, toonMat(0x6c8c99), [5.22, -1.88, 5.22], 0);
+diorama.add(poolBasinFloor);
+// 池内侧暗石壁（北壁 Z=2.62, 西壁 X=2.62）
+diorama.add(mkBox(5.2, 1.95, 0.22, M.rockDark, [5.22, -0.92, 2.62], 0));
+diorama.add(mkBox(0.22, 1.95, 5.2, M.rockDark, [2.62, -0.92, 5.22], 0));
+
+// 半透明乳青色温泉水体剖面（南面 Z=7.92 与东面 X=7.92 清晰透出池内景观）
+const poolVolumeMat = new THREE.MeshPhysicalMaterial({
+  color: 0x7fd6d8,
+  emissive: 0x2a6c7a,
+  emissiveIntensity: 0.28,
+  roughness: 0.12,
+  transmission: 0.58,
+  transparent: true,
+  opacity: 0.54,
+  depthWrite: false,
+});
+const poolVolume = new THREE.Mesh(new THREE.BoxGeometry(5.18, 1.82, 5.18), poolVolumeMat);
+poolVolume.position.set(5.24, -0.92, 5.24);
+diorama.add(poolVolume);
+
+// 剖面玻璃封边微细框线（仅东、南外沿）
+const cutEdgeMat = new THREE.MeshBasicMaterial({ color: 0xbef5ff, transparent: true, opacity: 0.45 });
+diorama.add(mkBox(5.24, 0.04, 0.04, cutEdgeMat, [5.24, -1.82, 7.86], 0));
+diorama.add(mkBox(0.04, 0.04, 5.24, cutEdgeMat, [7.86, -1.82, 5.24], 0));
+diorama.add(mkBox(0.04, 1.84, 0.04, cutEdgeMat, [7.86, -0.92, 7.86], 0));
+
+// 池底光滑白色卵石
+for (let i = 0; i < 42; i++) {
+  const px = 3.0 + ((i * 73) % 45) / 10;
+  const pz = 3.0 + ((i * 41) % 45) / 10;
+  const rx = 0.14 + (i % 4) * 0.05;
+  const pebble = mkSphere(rx, 8, 6, i % 5 === 0 ? toonMat(0xdcebf2) : M.whiteCeramic, [px, -1.75, pz], 0.02);
+  pebble.scale.set(1.2, 0.52, 0.95);
+  pebble.rotation.y = i * 0.7;
+  diorama.add(pebble);
+}
+
+// 池底淡粉色矿物结晶簇
+const crystalSpots = [[6.8, 7.1], [7.2, 5.4], [4.3, 7.3], [6.1, 6.2], [7.1, 3.8], [5.2, 7.1]];
+crystalSpots.forEach(([cx, cz], idx) => {
+  const grp = new THREE.Group();
+  grp.position.set(cx, -1.78, cz);
+  for (let k = 0; k < 4; k++) {
+    const h = 0.25 + ((idx + k) % 3) * 0.14;
+    const shard = new THREE.Mesh(new THREE.ConeGeometry(0.08, h, 5), M.crystalPink);
+    shard.position.set((k - 1.5) * 0.08, h * 0.45, ((k % 2) - 0.5) * 0.08);
+    shard.rotation.z = (k - 1.5) * 0.24;
+    shard.rotation.x = ((k % 2) - 0.5) * 0.22;
+    addOutline(shard, 0.03, true);
+    grp.add(shard);
+  }
+  diorama.add(grp);
+});
+
+// 池底缓缓上升的气泡
+const bubbleGeo = new THREE.SphereGeometry(0.055, 8, 8);
+const bubbleMat = new THREE.MeshBasicMaterial({ color: 0xe3ffff, transparent: true, opacity: 0.78 });
+for (let i = 0; i < 28; i++) {
+  const b = new THREE.Mesh(bubbleGeo, bubbleMat);
+  const bx = 3.1 + Math.random() * 4.4;
+  const bz = 3.1 + Math.random() * 4.4;
+  const by = -1.7 + Math.random() * 1.6;
+  b.position.set(bx, by, bz);
+  b.scale.setScalar(0.55 + Math.random() * 0.9);
+  diorama.add(b);
+  animBubbles.push({ mesh: b, baseX: bx, baseZ: bz, speed: 0.28 + Math.random() * 0.35, phase: Math.random() * 6.28 });
+}
+
+// 池底暖水中游动的红白锦鲤（5尾）
+function createKoi(cx, cz, radius, speed, phase, depthY) {
+  const koi = new THREE.Group();
+  const body = mkSphere(0.14, 10, 8, M.whiteCeramic, [0, 0, 0], 0.03);
+  body.scale.set(0.68, 0.55, 1.9);
+  koi.add(body);
+  // 锦鲤红斑（绯盘）
+  const spot1 = mkSphere(0.10, 8, 6, M.vermilion, [0, 0.04, 0.08], 0);
+  spot1.scale.set(0.75, 0.45, 1.1);
+  const spot2 = mkSphere(0.08, 8, 6, M.vermilion, [0.02, 0.03, -0.10], 0);
+  spot2.scale.set(0.7, 0.4, 0.9);
+  koi.add(spot1, spot2);
+  // 尾鳍
+  const tail = new THREE.Mesh(new THREE.ConeGeometry(0.10, 0.24, 4), M.whiteCeramic);
+  tail.rotation.x = Math.PI / 2;
+  tail.scale.set(0.32, 1, 1.1);
+  tail.position.set(0, 0, -0.32);
+  koi.add(tail);
+  // 胸鳍
+  const finL = mkBox(0.14, 0.02, 0.08, M.whiteCeramic, [-0.11, -0.02, 0.04], 0);
+  const finR = mkBox(0.14, 0.02, 0.08, M.whiteCeramic, [0.11, -0.02, 0.04], 0);
+  finL.rotation.y = 0.4; finR.rotation.y = -0.4;
+  koi.add(finL, finR);
+  koi.position.set(cx, depthY, cz);
+  diorama.add(koi);
+  animKoi.push({ group: koi, tail, cx, cz, radius, speed, phase, depthY });
+}
+createKoi(5.3, 5.5, 1.25, 0.42, 0.0, -1.25);
+createKoi(5.8, 5.2, 0.95, -0.38, 1.8, -0.88);
+createKoi(4.7, 6.1, 1.05, 0.34, 3.4, -1.42);
+createKoi(6.1, 6.3, 0.82, -0.46, 4.9, -1.05);
+createKoi(5.1, 4.8, 1.15, 0.31, 2.3, -1.52);
+
+// ----- 1.4 底座边角摆件：戴小红布帽与雪帽的石地藏、半埋雪中石灯笼、顶蓬松积雪黑色火山岩 -----
+// 石地藏（左前角 X=-6.7, Y=2.5, Z=6.8）
+const jizoGroup = new THREE.Group();
+jizoGroup.position.set(-6.7, 2.5, 6.8);
+jizoGroup.rotation.y = 0.55;
+jizoGroup.add(mkBox(0.68, 0.20, 0.68, M.rock, [0, 0.10, 0], 0.03)); // 石座
+jizoGroup.add(mkCyl(0.20, 0.28, 0.62, 10, M.rock, [0, 0.50, 0], 0.03)); // 身躯
+jizoGroup.add(mkSphere(0.20, 12, 10, M.rock, [0, 0.92, 0], 0.03)); // 头部
+// 小红围兜（前挂）
+const bib = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.28, 8), M.redCloth);
+bib.rotation.x = Math.PI;
+bib.position.set(0, 0.68, 0.14);
+addOutline(bib, 0.03, true);
+jizoGroup.add(bib);
+// 小红布帽
+const redCap = new THREE.Mesh(new THREE.SphereGeometry(0.215, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), M.redCloth);
+redCap.position.set(0, 0.94, 0);
+addOutline(redCap, 0.03, true);
+jizoGroup.add(redCap);
+// 顶上蓬松雪帽
+const jizoSnowCap = mkSphere(0.17, 10, 8, M.snow, [0, 1.12, -0.02], 0.025);
+jizoSnowCap.scale.set(1.15, 0.52, 1.12);
+jizoGroup.add(jizoSnowCap);
+diorama.add(jizoGroup);
+
+// 半埋在雪中的石灯笼（左前偏中 X=-4.6, Y=2.35, Z=7.15）
+const stoneLantern = new THREE.Group();
+stoneLantern.position.set(-4.6, 2.38, 7.12);
+stoneLantern.add(mkCyl(0.14, 0.18, 0.52, 6, M.rock, [0, 0.26, 0], 0.03));
+stoneLantern.add(mkBox(0.46, 0.10, 0.46, M.rock, [0, 0.56, 0], 0.03));
+// 暖光灯室
+stoneLantern.add(mkBox(0.28, 0.30, 0.28, M.lanternWarm, [0, 0.76, 0], 0));
+for (let k = 0; k < 4; k++) {
+  const a = (k * Math.PI) / 2 + Math.PI / 4;
+  stoneLantern.add(mkBox(0.05, 0.32, 0.05, M.rock, [Math.cos(a) * 0.18, 0.76, Math.sin(a) * 0.18], 0.02));
+}
+// 笠顶与积雪
+const kasa = new THREE.Mesh(new THREE.ConeGeometry(0.44, 0.24, 6), M.rock);
+kasa.position.set(0, 1.02, 0);
+addOutline(kasa, 0.03, true);
+stoneLantern.add(kasa);
+const kasaSnow = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.18, 6), M.snow);
+kasaSnow.position.set(0, 1.10, 0);
+stoneLantern.add(kasaSnow);
+stoneLantern.add(mkSphere(0.07, 8, 6, M.rock, [0, 1.22, 0], 0.02));
+// 半埋雪堆
+const burySnow = mkSphere(0.48, 10, 8, M.snow, [0, 0.16, 0.08], 0.02);
+burySnow.scale.set(1.3, 0.52, 1.15);
+stoneLantern.add(burySnow);
+diorama.add(stoneLantern);
+addWarmLight(-4.6, 3.2, 7.1, 0xffaa44, 1.8, 5.2, 1.2);
+
+// 底座边角顶着蓬松积雪的黑色火山岩
+const volcanicSpecs = [
+  [-7.2, 2.55, 5.3, 0.65, 0.48],
+  [-6.2, 2.50, 7.35, 0.45, 0.34],
+  [-7.1, 5.45, -6.9, 0.78, 0.58],
+  [1.1, 0.38, 7.35, 0.56, 0.44],
+  [0.2, 2.48, 7.25, 0.52, 0.40],
+];
+volcanicSpecs.forEach(([x, y, z, r, h], idx) => {
+  const rg = new THREE.Group();
+  rg.position.set(x, y, z);
+  const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), M.rockVolcanic);
+  rock.scale.set(1.15, h / r, 0.95);
+  rock.rotation.set(idx * 0.4, idx * 0.8, 0.1);
+  rock.castShadow = true; rock.receiveShadow = true;
+  addOutline(rock, 0.035, true);
+  rg.add(rock);
+  const cap = mkSphere(r * 0.82, 10, 8, M.snow, [0, h * 0.62, 0], 0.025);
+  cap.scale.set(1.12, 0.42, 0.96);
+  rg.add(cap);
+  diorama.add(rg);
+});
+
+// ==================== 模块2：索道小站、缆车、稻草垫石阶与朱红小鸟居 ====================
+const stationGroup = new THREE.Group();
+stationGroup.position.set(-4.2, 2.50, 3.0);
+diorama.add(stationGroup);
+
+// 木质站台甲板与阶梯底座
+stationGroup.add(mkBox(5.4, 0.28, 4.4, M.woodMid, [0, 0.14, 0], 0.02));
+for (let i = -2; i <= 2; i++) {
+  stationGroup.add(mkBox(5.44, 0.04, 0.08, M.woodDark, [0, 0.29, i * 0.85], 0));
+}
+// 站台后侧木栏杆与薄雪
+for (let i = -2; i <= 2; i++) {
+  stationGroup.add(mkBox(0.11, 0.78, 0.11, M.woodDark, [i * 1.25, 0.65, 2.08], 0.02));
+}
+stationGroup.add(mkBox(5.2, 0.10, 0.12, M.woodDark, [0, 1.02, 2.08], 0.02));
+stationGroup.add(mkBox(5.22, 0.08, 0.14, M.snow, [0, 1.09, 2.08], 0.015));
+
+// 站台候车亭木柱与被积雪压弯的斜屋檐 + 垂挂冰锥
+const roofGroup = new THREE.Group();
+roofGroup.position.set(-0.5, 0.28, -0.55);
+stationGroup.add(roofGroup);
+[[-1.8, -1.0], [1.8, -1.0], [-1.8, 0.95], [1.8, 0.95]].forEach(([px, pz]) => {
+  roofGroup.add(mkBox(0.18, 2.45, 0.18, M.woodTimber, [px, 1.22, pz], 0.025));
+});
+// 候车亭背板与带水汽的玻璃窗
+roofGroup.add(mkBox(3.65, 1.15, 0.12, M.woodMid, [0, 0.58, -1.02], 0.02));
+roofGroup.add(mkBox(3.4, 1.0, 0.06, M.glassMist, [0, 1.65, -1.02], 0));
+roofGroup.add(mkBox(0.08, 1.05, 0.10, M.woodDark, [0, 1.65, -1.02], 0.02));
+// 斜屋顶与厚蓬松积雪（檐角略微下压弯曲感）
+const stRoofBase = mkBox(4.5, 0.18, 2.95, M.roofTile, [0, 2.58, 0.0], 0.02);
+stRoofBase.rotation.x = 0.22;
+roofGroup.add(stRoofBase);
+const stRoofSnow = mkBox(4.58, 0.34, 3.04, M.snow, [0, 2.79, 0.04], 0.02);
+stRoofSnow.rotation.x = 0.22;
+roofGroup.add(stRoofSnow);
+// 压弯檐角的雪包
+const eaveDroopL = mkSphere(0.42, 10, 8, M.snow, [-2.12, 2.42, 1.32], 0.02);
+eaveDroopL.scale.set(1.2, 0.55, 0.8);
+const eaveDroopR = mkSphere(0.42, 10, 8, M.snow, [2.12, 2.42, 1.32], 0.02);
+eaveDroopR.scale.set(1.2, 0.55, 0.8);
+roofGroup.add(eaveDroopL, eaveDroopR);
+// 屋檐垂挂半透明冰锥
+for (let i = 0; i < 14; i++) {
+  const ih = 0.18 + ((i * 17) % 5) * 0.08;
+  const ic = new THREE.Mesh(new THREE.ConeGeometry(0.036, ih, 5), M.ice);
+  ic.rotation.x = Math.PI;
+  ic.position.set(-2.05 + i * 0.315, 2.26 - ih * 0.5, 1.44);
+  roofGroup.add(ic);
+}
+// 候车亭暖黄顶灯
+roofGroup.add(mkCyl(0.18, 0.22, 0.12, 10, M.metalDark, [0, 2.38, 0.1], 0.02));
+roofGroup.add(mkSphere(0.11, 8, 8, M.lanternWarm, [0, 2.28, 0.1], 0));
+addWarmLight(-4.7, 4.9, 2.6, 0xffb35c, 2.5, 7.5, 0.4);
+
+// 老式投币望远镜（覆着薄雪，位于站台观景边缘）
+const scopeGroup = new THREE.Group();
+scopeGroup.position.set(1.85, 0.28, 1.55);
+scopeGroup.rotation.y = -0.52;
+scopeGroup.add(mkCyl(0.18, 0.24, 0.10, 10, M.metalDark, [0, 0.05, 0], 0.02));
+scopeGroup.add(mkCyl(0.055, 0.075, 0.92, 8, M.metalSteel, [0, 0.52, 0], 0.02));
+scopeGroup.add(mkBox(0.16, 0.18, 0.12, M.metalDark, [0, 0.72, 0.04], 0.02)); // 投币盒
+const scopeBody = mkCyl(0.07, 0.10, 0.52, 10, M.metalSteel, [0, 1.05, 0.04], 0.02);
+scopeBody.rotation.x = Math.PI / 2 - 0.18;
+scopeGroup.add(scopeBody);
+const scopeSnow = mkSphere(0.10, 8, 6, M.snow, [0, 1.14, 0.05], 0.015);
+scopeSnow.scale.set(0.95, 0.38, 2.1);
+scopeGroup.add(scopeSnow);
+stationGroup.add(scopeGroup);
+
+// 圆形热饮自动贩卖机（取物口发着微光、机身带暖光饮品橱窗、冒热气）
+const vendGroup = new THREE.Group();
+vendGroup.position.set(-1.95, 0.28, -0.55);
+vendGroup.rotation.y = 0.22;
+vendGroup.add(mkCyl(0.46, 0.48, 1.58, 16, toonMat(0xd6483e, { warm: true }), [0, 0.79, 0], 0.025));
+// 顶盖积雪
+const vendSnow = mkSphere(0.45, 12, 8, M.snow, [0, 1.62, 0], 0.02);
+vendSnow.scale.set(1.02, 0.34, 1.02);
+vendGroup.add(vendSnow);
+// 发光热饮展示窗
+vendGroup.add(mkBox(0.56, 0.44, 0.10, M.shojiGlow, [0, 1.12, 0.43], 0.02));
+for (let k = -2; k <= 2; k++) {
+  vendGroup.add(mkCyl(0.032, 0.032, 0.11, 6, k % 2 === 0 ? M.vermilion : M.gold, [k * 0.095, 1.06, 0.47], 0));
+}
+// 发着微光的取物口
+vendGroup.add(mkBox(0.42, 0.22, 0.12, M.rockVolcanic, [0, 0.40, 0.43], 0.02));
+vendGroup.add(mkBox(0.34, 0.14, 0.06, M.lanternWarm, [0, 0.40, 0.47], 0));
+stationGroup.add(vendGroup);
+addWarmLight(-6.1, 3.3, 2.8, 0xffaa4d, 1.4, 4.2, 2.1);
+
+// 白底黑字竖排站名牌（Canvas纹理绘制“雪見ヶ丘駅”）
+function createSignTex(text, vertical = true, bg = '#f5f5f2', fg = '#1a1f2e', border = '#24304a') {
+  const c = document.createElement('canvas');
+  c.width = vertical ? 128 : 256;
+  c.height = vertical ? 320 : 128;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.strokeStyle = border; ctx.lineWidth = 10; ctx.strokeRect(8, 8, c.width - 16, c.height - 16);
+  ctx.fillStyle = fg;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  if (vertical) {
+    ctx.font = 'bold 42px "Yu Mincho", "MS Mincho", serif';
+    const chars = [...text];
+    const step = (c.height - 70) / Math.max(chars.length, 1);
+    chars.forEach((ch, idx) => ctx.fillText(ch, c.width / 2, 46 + idx * step + step * 0.3));
+  } else {
+    ctx.font = 'bold 46px "Yu Mincho", "MS Mincho", serif';
+    ctx.fillText(text, c.width / 2, c.height / 2 + 2);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+const signGroup = new THREE.Group();
+signGroup.position.set(1.55, 0.28, -0.55);
+signGroup.add(mkCyl(0.045, 0.05, 1.85, 8, M.woodDark, [0, 0.92, 0], 0.02));
+const signFaceMat = new THREE.MeshToonMaterial({ map: createSignTex('雪見駅', true), gradientMap: gradSoft });
+const signBoard = new THREE.Mesh(new THREE.BoxGeometry(0.42, 1.02, 0.06), [M.woodDark, M.woodDark, M.woodDark, M.woodDark, signFaceMat, signFaceMat]);
+signBoard.position.set(0, 1.28, 0.04);
+addOutline(signBoard, 0.025, true);
+signGroup.add(signBoard);
+signGroup.add(mkBox(0.46, 0.08, 0.12, M.snow, [0, 1.82, 0.04], 0.015));
+stationGroup.add(signGroup);
+
+// 挂着小红灯笼的木制长椅 + 人刚离开的痕迹：红色格纹围巾 & 冒着微弱热气的罐装热饮
+const benchGroup = new THREE.Group();
+benchGroup.position.set(-0.35, 0.28, 0.72);
+stationGroup.add(benchGroup);
+// 长椅木板与腿
+benchGroup.add(mkBox(1.85, 0.09, 0.56, M.woodMid, [0, 0.42, 0], 0.025));
+benchGroup.add(mkBox(1.85, 0.42, 0.08, M.woodMid, [0, 0.72, -0.25], 0.025));
+[[-0.76, -0.18], [0.76, -0.18], [-0.76, 0.18], [0.76, 0.18]].forEach(([bx, bz]) => {
+  benchGroup.add(mkBox(0.09, 0.42, 0.09, M.woodDark, [bx, 0.21, bz], 0.02));
+});
+// 长椅旁灯笼木柱与随微风摆动的小红灯笼
+benchGroup.add(mkBox(0.09, 1.75, 0.09, M.woodDark, [1.05, 0.87, -0.18], 0.02));
+benchGroup.add(mkBox(0.42, 0.07, 0.07, M.woodDark, [0.88, 1.70, -0.18], 0.02));
+function createHangingLantern(scale = 1.0) {
+  const pivot = new THREE.Group();
+  pivot.add(mkCyl(0.015, 0.015, 0.18 * scale, 6, M.metalDark, [0, -0.09 * scale, 0], 0));
+  const body = mkSphere(0.16 * scale, 10, 8, M.lanternRed, [0, -0.30 * scale, 0], 0.025);
+  body.scale.set(0.95, 1.32, 0.95);
+  pivot.add(body);
+  pivot.add(mkCyl(0.11 * scale, 0.11 * scale, 0.05 * scale, 8, M.rockVolcanic, [0, -0.12 * scale, 0], 0));
+  pivot.add(mkCyl(0.09 * scale, 0.09 * scale, 0.05 * scale, 8, M.rockVolcanic, [0, -0.49 * scale, 0], 0));
+  return pivot;
+}
+const benchLantern = createHangingLantern(0.95);
+benchLantern.position.set(0.72, 1.68, -0.18);
+benchGroup.add(benchLantern);
+animSway.push({ obj: benchLantern, ampX: 0.07, ampZ: 0.09, speed: 1.8, phase: 0.3 });
+addWarmLight(-3.8, 4.1, 3.6, 0xff7b36, 1.9, 5.4, 3.0);
+
+// 红色格纹围巾（Canvas格纹纹理，搭在长椅上且一端垂下随微风轻摆）
+function createPlaidTex() {
+  const c = document.createElement('canvas');
+  c.width = 128; c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#c92a2a'; ctx.fillRect(0, 0, 128, 128);
+  ctx.fillStyle = 'rgba(25, 35, 65, 0.55)';
+  for (let i = 0; i < 128; i += 32) { ctx.fillRect(i, 0, 10, 128); ctx.fillRect(0, i, 128, 10); }
+  ctx.fillStyle = 'rgba(248, 224, 150, 0.75)';
+  for (let i = 14; i < 128; i += 32) { ctx.fillRect(i, 0, 3, 128); ctx.fillRect(0, i, 128, 3); }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const scarfMat = toonMat(0xffffff, { warm: true, map: createPlaidTex() });
+const scarfRest = mkBox(0.54, 0.08, 0.30, scarfMat, [-0.42, 0.50, 0.04], 0.02);
+scarfRest.rotation.y = 0.25;
+benchGroup.add(scarfRest);
+const scarfTailPivot = new THREE.Group();
+scarfTailPivot.position.set(-0.24, 0.47, 0.26);
+const scarfTail = mkBox(0.22, 0.42, 0.05, scarfMat, [0, -0.20, 0.02], 0.02);
+scarfTailPivot.add(scarfTail);
+benchGroup.add(scarfTailPivot);
+animSway.push({ obj: scarfTailPivot, ampX: 0.09, ampZ: 0.05, speed: 2.2, phase: 1.5 });
+
+// 冒着微弱热气的罐装热饮（长椅一侧）
+const hotCan = mkCyl(0.052, 0.052, 0.15, 10, toonMat(0xebe3d5, { warm: true }), [0.22, 0.54, 0.08], 0.02);
+benchGroup.add(hotCan);
+benchGroup.add(mkCyl(0.053, 0.053, 0.05, 10, M.vermilion, [0.22, 0.54, 0.08], 0));
+
+// ----- 2.2 钢缆支柱塔、索道钢缆与两只往返的方形暖光缆车 -----
+// 站台侧钢缆小支柱塔
+const tower1 = new THREE.Group();
+tower1.position.set(-6.35, 2.52, 0.35);
+diorama.add(tower1);
+[[-0.36, -0.36], [0.36, -0.36], [-0.36, 0.36], [0.36, 0.36]].forEach(([tx, tz]) => {
+  const leg = mkCyl(0.045, 0.065, 4.4, 6, M.metalDark, [tx * 0.72, 2.2, tz * 0.72], 0.02);
+  leg.rotation.z = tx > 0 ? 0.065 : -0.065;
+  leg.rotation.x = tz > 0 ? -0.065 : 0.065;
+  tower1.add(leg);
+});
+for (let h = 1.0; h <= 3.6; h += 1.2) {
+  tower1.add(mkBox(0.68, 0.06, 0.68, M.metalDark, [0, h, 0], 0));
+}
+tower1.add(mkBox(1.85, 0.14, 0.18, M.metalSteel, [0, 4.35, 0], 0.02));
+tower1.add(mkBox(1.88, 0.08, 0.20, M.snow, [0, 4.45, 0], 0.01));
+// 滑轮
+const wheel1L = mkCyl(0.22, 0.22, 0.08, 12, M.vermilionDark, [-0.82, 4.35, 0], 0.02);
+wheel1L.rotation.z = Math.PI / 2;
+const wheel1R = mkCyl(0.22, 0.22, 0.08, 12, M.vermilionDark, [0.82, 4.35, 0], 0.02);
+wheel1R.rotation.z = Math.PI / 2;
+tower1.add(wheel1L, wheel1R);
+
+// 山顶高处第二座索道支架（X=-6.35, Y=5.38, Z=-6.8）
+const tower2 = new THREE.Group();
+tower2.position.set(-6.35, 5.38, -6.8);
+diorama.add(tower2);
+[[-0.32, -0.32], [0.32, -0.32], [-0.32, 0.32], [0.32, 0.32]].forEach(([tx, tz]) => {
+  tower2.add(mkCyl(0.04, 0.055, 3.8, 6, M.metalDark, [tx * 0.72, 1.9, tz * 0.72], 0.02));
+});
+tower2.add(mkBox(1.85, 0.14, 0.18, M.metalSteel, [0, 3.75, 0], 0.02));
+tower2.add(mkBox(1.88, 0.08, 0.20, M.snow, [0, 3.85, 0], 0.01));
+
+// 索道往返双钢缆（从站台前伸出经塔1到塔2向山顶延伸）
+const cableAStart = new THREE.Vector3(-7.17, 6.25, 4.4);
+const cableAEnd = new THREE.Vector3(-7.17, 9.75, -8.4);
+const cableBStart = new THREE.Vector3(-5.53, 6.25, 4.4);
+const cableBEnd = new THREE.Vector3(-5.53, 9.75, -8.4);
+const cableMat = new THREE.LineBasicMaterial({ color: 0x20273d });
+diorama.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([cableAStart, cableAEnd]), cableMat));
+diorama.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([cableBStart, cableBEnd]), cableMat));
+
+// 两只小型方形缆车（亮暖黄小灯，缓缓沿钢缆往返，车厢轻轻晃动）
+function createGondola(colorHex) {
+  const root = new THREE.Group();
+  const swing = new THREE.Group();
+  root.add(swing);
+  // 吊臂与夹具
+  swing.add(mkBox(0.12, 0.12, 0.20, M.metalDark, [0, 0, 0], 0.02));
+  swing.add(mkCyl(0.032, 0.032, 0.78, 6, M.metalDark, [0, -0.40, 0], 0.02));
+  // 方形车厢（下半车身+四面透暖光的车窗+覆雪车顶）
+  swing.add(mkBox(0.86, 0.42, 1.08, toonMat(colorHex, { warm: true }), [0, -1.26, 0], 0.025));
+  swing.add(mkBox(0.78, 0.42, 1.00, M.shojiSoft, [0, -0.88, 0], 0));
+  // 车窗四根细角柱
+  [[-0.41, -0.52], [0.41, -0.52], [-0.41, 0.52], [0.41, 0.52]].forEach(([cx, cz]) => {
+    swing.add(mkBox(0.07, 0.44, 0.07, M.woodDark, [cx, -0.88, cz], 0.015));
+  });
+  swing.add(mkBox(0.92, 0.10, 1.14, M.metalDark, [0, -0.65, 0], 0.02));
+  swing.add(mkBox(0.90, 0.12, 1.10, M.snow, [0, -0.56, 0], 0.015));
+  // 车厢内部晃动暖黄小灯
+  const lamp = mkSphere(0.07, 8, 6, M.lanternWarm, [0, -0.76, 0], 0);
+  swing.add(lamp);
+  const pt = new THREE.PointLight(0xffb655, 1.6, 5.2, 1.7);
+  pt.position.set(0, -0.92, 0);
+  swing.add(pt);
+  flickerLights.push({ light: pt, base: 1.6, phase: Math.random() * 6 });
+  diorama.add(root);
+  return { root, swing };
+}
+const gondolaA = createGondola(0xc83e32);
+const gondolaB = createGondola(0x3a6a8c);
+
+// ----- 2.3 铺着防滑稻草垫的石阶 & 覆雪朱红小鸟居 -----
+// 从站台东侧 (X=-1.3, Y=2.45, Z=2.6) 向右下方通往温泉旅馆庭院 (X=1.7, Y=0.45, Z=2.6)
+const stairsGroup = new THREE.Group();
+diorama.add(stairsGroup);
+const stepCount = 7;
+for (let i = 0; i < stepCount; i++) {
+  const t = i / (stepCount - 1);
+  const sx = -1.25 + t * 2.85;
+  const sy = 2.32 - t * 1.92;
+  const sz = 2.65;
+  stairsGroup.add(mkBox(0.62, 0.34, 1.85, M.rock, [sx, sy, sz], 0.025));
+  // 踏面两侧积雪与中间防滑稻草垫
+  stairsGroup.add(mkBox(0.46, 0.045, 1.06, M.straw, [sx + 0.04, sy + 0.19, sz], 0.018));
+  stairsGroup.add(mkBox(0.58, 0.08, 0.32, M.snow, [sx, sy + 0.20, sz - 0.74], 0.015));
+  stairsGroup.add(mkBox(0.58, 0.08, 0.32, M.snow, [sx, sy + 0.20, sz + 0.74], 0.015));
+}
+
+// 覆雪朱红小鸟居（跨在石阶中段 X=0.2, Y=1.35, Z=2.65，面向石阶通道）
+const toriiGroup = new THREE.Group();
+toriiGroup.position.set(0.25, 1.32, 2.65);
+toriiGroup.rotation.y = Math.PI / 2;
+diorama.add(toriiGroup);
+// 左右柱与黑石础
+[-1.08, 1.08].forEach((tx) => {
+  toriiGroup.add(mkCyl(0.14, 0.16, 0.34, 8, M.rockVolcanic, [tx, 0.17, 0], 0.02));
+  toriiGroup.add(mkCyl(0.105, 0.115, 2.65, 10, M.vermilion, [tx, 1.55, 0], 0.025));
+});
+// 下横梁贯木与额束
+toriiGroup.add(mkBox(2.75, 0.15, 0.16, M.vermilion, [0, 2.38, 0], 0.02));
+toriiGroup.add(mkBox(0.22, 0.42, 0.16, M.rockVolcanic, [0, 2.62, 0], 0.02));
+// 上横梁笠木（黑瓦顶+朱红岛木+两端上翘感+厚积雪）
+toriiGroup.add(mkBox(3.15, 0.18, 0.24, M.vermilion, [0, 2.84, 0], 0.02));
+toriiGroup.add(mkBox(3.32, 0.12, 0.30, M.rockVolcanic, [0, 2.96, 0], 0.02));
+const toriiSnow = mkBox(3.26, 0.22, 0.34, M.snow, [0, 3.12, 0], 0.02);
+toriiGroup.add(toriiSnow);
+
+// ==================== 模块3：两层木构温泉旅馆与精细室内细节 ====================
+const innGroup = new THREE.Group();
+innGroup.position.set(4.15, 0.52, -3.55); // 位于右后侧庭院上方（X: 1.0..7.3, Z: -6.9..-0.2）
+diorama.add(innGroup);
+
+// 旅馆抬高木质缘侧廊台与朱红廊柱
+innGroup.add(mkBox(6.2, 0.28, 5.2, M.woodMid, [0, 0.14, 0], 0.02));
+// 一楼大厅木地板与榻榻米
+innGroup.add(mkBox(5.4, 0.08, 4.3, M.tatami, [0, 0.30, -0.25], 0));
+// 一楼后墙与左右侧墙（留出正面大半敞开的格子拉门，让室内清晰可见）
+innGroup.add(mkBox(5.6, 2.35, 0.18, M.woodMid, [0, 1.48, -2.35], 0.02)); // 后墙
+innGroup.add(mkBox(0.18, 2.35, 4.5, M.woodMid, [-2.78, 1.48, -0.15], 0.02)); // 西墙
+innGroup.add(mkBox(0.18, 2.35, 4.5, M.woodMid, [2.78, 1.48, -0.15], 0.02)); // 东墙
+// 正面四根朱红漆廊柱（点缀暖朱红）
+[-2.82, -1.05, 1.05, 2.82].forEach((px) => {
+  innGroup.add(mkBox(0.18, 2.38, 0.18, M.vermilion, [px, 1.48, 2.08], 0.025));
+});
+// 敞开的格子拉门（推至两侧，中间敞开展现大厅地炉、柜台、三花猫）
+[-2.05, 2.05].forEach((gx) => {
+  const shojiPanel = new THREE.Group();
+  shojiPanel.position.set(gx, 1.38, 1.98);
+  shojiPanel.add(mkBox(1.38, 2.10, 0.06, M.shojiSoft, [0, 0, 0], 0));
+  // 细木格条
+  for (let r = -2; r <= 2; r++) shojiPanel.add(mkBox(1.40, 0.04, 0.08, M.woodDark, [0, r * 0.40, 0], 0));
+  for (let c = -2; c <= 2; c++) shojiPanel.add(mkBox(0.04, 2.12, 0.08, M.woodDark, [c * 0.32, 0, 0], 0));
+  innGroup.add(shojiPanel);
+});
+
+// 一楼门头深蓝色暖帘「雪見の湯」（随微风轻摆）
+function createNorenTex() {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#1b315e'; ctx.fillRect(0, 0, 256, 128);
+  ctx.strokeStyle = '#d9e7ff'; ctx.lineWidth = 4; ctx.strokeRect(8, 8, 240, 112);
+  ctx.fillStyle = '#f8f6ee';
+  ctx.font = 'bold 44px "Yu Mincho", "MS Mincho", serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('雪見の湯', 128, 66);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const norenTex = createNorenTex();
+const norenBar = mkCyl(0.032, 0.032, 2.08, 8, M.bamboo, [0, 2.32, 2.16], 0.015);
+norenBar.rotation.z = Math.PI / 2;
+innGroup.add(norenBar);
+const norenPivot = new THREE.Group();
+norenPivot.position.set(0, 2.30, 2.16);
+const norenMesh = new THREE.Mesh(new THREE.BoxGeometry(1.88, 0.68, 0.03), toonMat(0xffffff, { map: norenTex }));
+norenMesh.position.set(0, -0.36, 0);
+addOutline(norenMesh, 0.02, true);
+norenPivot.add(norenMesh);
+innGroup.add(norenPivot);
+animSway.push({ obj: norenPivot, ampX: 0.11, ampZ: 0.02, speed: 1.65, phase: 0.7 });
+
+// 一楼大厅室内细节
+// 1) 地炉（围炉里）+ 燃着的炭火 + 上方悬着的铁壶（壶嘴冒蒸汽）
+const irori = new THREE.Group();
+irori.position.set(-0.55, 0.34, 0.35);
+innGroup.add(irori);
+irori.add(mkBox(1.18, 0.16, 1.18, M.woodDark, [0, 0.08, 0], 0.02));
+irori.add(mkBox(0.86, 0.12, 0.86, toonMat(0x525260), [0, 0.12, 0], 0)); // 炉灰
+// 发光红炭块
+for (let i = 0; i < 6; i++) {
+  const a = (i / 6) * Math.PI * 2;
+  irori.add(mkBox(0.14, 0.08, 0.10, M.charcoalGlow, [Math.cos(a) * 0.15, 0.18, Math.sin(a) * 0.15], 0));
+}
+// 自在钩与悬吊铁壶
+irori.add(mkCyl(0.022, 0.022, 1.65, 6, M.metalDark, [0, 1.38, 0], 0));
+const kettle = mkSphere(0.18, 10, 8, M.rockVolcanic, [0, 0.56, 0], 0.025);
+kettle.scale.set(1.1, 0.82, 1.1);
+irori.add(kettle);
+const spout = mkCyl(0.025, 0.04, 0.18, 6, M.rockVolcanic, [0.19, 0.60, 0], 0);
+spout.rotation.z = -0.85;
+irori.add(spout);
+addWarmLight(3.6, 1.15, -3.2, 0xff6e2b, 3.2, 7.2, 0.9);
+
+// 2) 地炉旁坐垫上打盹的三花猫（会偶尔抖耳朵/甩尾巴）
+const catGroup = new THREE.Group();
+catGroup.position.set(0.32, 0.36, 0.72);
+catGroup.rotation.y = -0.55;
+innGroup.add(catGroup);
+catGroup.add(mkBox(0.56, 0.08, 0.56, M.redCloth, [0, 0.04, 0], 0.02)); // 红色坐垫
+const catBody = mkSphere(0.17, 10, 8, M.whiteCeramic, [0, 0.18, 0], 0.025);
+catBody.scale.set(1.15, 0.72, 1.32);
+catGroup.add(catBody);
+// 三花橘斑与黑斑
+catGroup.add(mkSphere(0.09, 8, 6, toonMat(0xe07b39, { warm: true }), [0.06, 0.24, 0.05], 0));
+catGroup.add(mkSphere(0.08, 8, 6, M.rockVolcanic, [-0.08, 0.23, -0.06], 0));
+const catHead = mkSphere(0.11, 10, 8, M.whiteCeramic, [0, 0.22, 0.18], 0.025);
+catGroup.add(catHead);
+const catEarL = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.08, 4), M.rockVolcanic);
+catEarL.position.set(-0.07, 0.32, 0.19);
+const catEarR = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.08, 4), toonMat(0xe07b39, { warm: true }));
+catEarR.position.set(0.07, 0.32, 0.19);
+catGroup.add(catEarL, catEarR);
+const catTailPivot = new THREE.Group();
+catTailPivot.position.set(0, 0.16, -0.19);
+const catTail = mkCyl(0.025, 0.032, 0.28, 6, M.rockVolcanic, [0, 0.04, -0.11], 0.02);
+catTail.rotation.x = 1.25;
+catTailPivot.add(catTail);
+catGroup.add(catTailPivot);
+
+// 3) 榻榻米矮桌、茶具与堆叠的坐垫
+const lowTable = new THREE.Group();
+lowTable.position.set(-1.65, 0.34, -0.75);
+innGroup.add(lowTable);
+lowTable.add(mkBox(0.95, 0.07, 0.68, M.woodDark, [0, 0.28, 0], 0.02));
+[[-0.38, -0.25], [0.38, -0.25], [-0.38, 0.25], [0.38, 0.25]].forEach(([lx, lz]) => {
+  lowTable.add(mkBox(0.07, 0.28, 0.07, M.woodDark, [lx, 0.14, lz], 0));
+});
+// 茶壶与两只茶杯
+lowTable.add(mkSphere(0.08, 8, 6, M.vermilionDark, [0, 0.36, 0], 0.02));
+lowTable.add(mkCyl(0.038, 0.032, 0.06, 8, M.whiteCeramic, [0.18, 0.35, 0.08], 0));
+lowTable.add(mkCyl(0.038, 0.032, 0.06, 8, M.whiteCeramic, [-0.16, 0.35, -0.06], 0));
+// 堆叠坐垫
+for (let i = 0; i < 3; i++) {
+  innGroup.add(mkBox(0.46, 0.08, 0.46, i % 2 === 0 ? M.norenBlue : M.redCloth, [-2.25, 0.38 + i * 0.085, 0.55], 0.02));
+}
+
+// 4) 前台木柜台 + 算盘、铃铛、招财猫 + 墙上手写菜单木牌与老式挂钟 + 煤油暖炉
+innGroup.add(mkBox(1.55, 0.76, 0.58, M.woodTimber, [1.55, 0.72, -0.95], 0.02));
+// 算盘
+innGroup.add(mkBox(0.28, 0.03, 0.16, M.woodDark, [1.18, 1.12, -0.92], 0));
+// 铜铃铛
+innGroup.add(mkSphere(0.055, 8, 6, M.gold, [1.55, 1.14, -0.82], 0.02));
+// 招财猫（白身红项圈举爪）
+const maneki = new THREE.Group();
+maneki.position.set(1.96, 1.10, -0.92);
+maneki.add(mkCyl(0.075, 0.095, 0.20, 8, M.whiteCeramic, [0, 0.10, 0], 0.02));
+maneki.add(mkSphere(0.085, 8, 8, M.whiteCeramic, [0, 0.24, 0], 0.02));
+maneki.add(mkCyl(0.08, 0.08, 0.03, 8, M.redCloth, [0, 0.17, 0], 0));
+maneki.add(mkCyl(0.022, 0.025, 0.11, 6, M.whiteCeramic, [0.08, 0.24, 0.05], 0));
+innGroup.add(maneki);
+
+// 墙上手写菜单木牌（木条排挂在后墙）与老式挂钟
+for (let i = 0; i < 4; i++) {
+  innGroup.add(mkBox(0.18, 0.52, 0.03, M.woodLight, [0.8 + i * 0.24, 1.85, -2.23], 0.015));
+}
+const wallClock = new THREE.Group();
+wallClock.position.set(-0.65, 1.85, -2.22);
+wallClock.add(mkBox(0.32, 0.54, 0.09, M.woodDark, [0, 0, 0], 0.02));
+wallClock.add(mkCyl(0.11, 0.11, 0.03, 12, M.whiteCeramic, [0, 0.12, 0.05], 0));
+wallClock.children[1].rotation.x = Math.PI / 2;
+innGroup.add(wallClock);
+
+// 橘红微光的煤油暖炉
+const stove = new THREE.Group();
+stove.position.set(1.45, 0.34, 0.55);
+stove.add(mkCyl(0.22, 0.24, 0.42, 12, M.metalDark, [0, 0.21, 0], 0.02));
+stove.add(mkCyl(0.16, 0.16, 0.22, 12, toonMat(0xff6b24, { emissive: 0xff4c12, emissiveIntensity: 1.0 }), [0, 0.44, 0], 0));
+stove.add(mkCyl(0.20, 0.20, 0.05, 12, M.metalSteel, [0, 0.57, 0], 0.02));
+innGroup.add(stove);
+addWarmLight(5.6, 1.1, -3.0, 0xff6b28, 2.2, 5.5, 2.5);
+
+// 一楼小挑檐（屋檐覆雪）
+const eave1 = mkBox(6.65, 0.16, 1.35, M.roofTile, [0, 2.66, 2.52], 0.02);
+eave1.rotation.x = 0.28;
+innGroup.add(eave1);
+const eave1Snow = mkBox(6.72, 0.22, 1.40, M.snow, [0, 2.80, 2.54], 0.015);
+eave1Snow.rotation.x = 0.28;
+innGroup.add(eave1Snow);
+
+// ----- 3.2 二楼客房、挑檐走廊与清晰可见的室内细节 -----
+const f2Y = 2.75;
+// 二楼地板与挑檐走廊
+innGroup.add(mkBox(5.9, 0.16, 4.9, M.woodMid, [0, f2Y, -0.05], 0.02));
+innGroup.add(mkBox(5.2, 0.06, 3.8, M.tatami, [0, f2Y + 0.10, -0.35], 0));
+// 二楼三面墙（后墙、东墙、西墙，西墙留半开障子窗）
+innGroup.add(mkBox(5.5, 2.15, 0.16, M.woodMid, [0, f2Y + 1.15, -2.25], 0.02));
+innGroup.add(mkBox(0.16, 2.15, 4.2, M.woodMid, [2.70, f2Y + 1.15, -0.15], 0.02));
+// 西墙带发光障子窗
+innGroup.add(mkBox(0.16, 0.72, 4.2, M.woodMid, [-2.70, f2Y + 0.44, -0.15], 0.02));
+innGroup.add(mkBox(0.16, 0.42, 4.2, M.woodMid, [-2.70, f2Y + 2.02, -0.15], 0.02));
+innGroup.add(mkBox(0.08, 1.05, 1.85, M.shojiSoft, [-2.70, f2Y + 1.32, -0.2], 0));
+// 二楼走廊栏杆与薄雪
+innGroup.add(mkBox(5.85, 0.08, 0.10, M.vermilionDark, [0, f2Y + 0.78, 2.32], 0.018));
+innGroup.add(mkBox(5.88, 0.07, 0.12, M.snow, [0, f2Y + 0.85, 2.32], 0.012));
+for (let i = -5; i <= 5; i++) {
+  innGroup.add(mkBox(0.07, 0.72, 0.07, M.woodDark, [i * 0.55, f2Y + 0.42, 2.32], 0));
+}
+// 二楼正面一排拉开一半的纸拉门（左右各半掩，中间透出温暖客房全貌）
+[-2.05, -1.15, 1.98].forEach((sx) => {
+  const sp = new THREE.Group();
+  sp.position.set(sx, f2Y + 1.12, 1.56);
+  sp.add(mkBox(1.08, 2.02, 0.05, M.shojiSoft, [0, 0, 0], 0));
+  for (let r = -2; r <= 2; r++) sp.add(mkBox(1.10, 0.035, 0.07, M.woodDark, [0, r * 0.38, 0], 0));
+  for (let c = -1; c <= 1; c++) sp.add(mkBox(0.035, 2.04, 0.07, M.woodDark, [c * 0.35, 0, 0], 0));
+  innGroup.add(sp);
+});
+
+// 二楼客房室内细节：
+// 1) 铺好的被褥（枕头+蓬松棉被）
+innGroup.add(mkBox(1.45, 0.12, 1.95, M.whiteCeramic, [-0.55, f2Y + 0.18, -0.55], 0.02));
+const quilt = mkBox(1.42, 0.18, 1.35, toonMat(0x46638f, { warm: true }), [-0.55, f2Y + 0.28, -0.25], 0.02);
+innGroup.add(quilt);
+innGroup.add(mkBox(0.55, 0.14, 0.32, M.whiteCeramic, [-0.55, f2Y + 0.29, -1.25], 0.02)); // 枕头
+
+// 2) 纸罩落地灯（行灯）
+const floorLamp = new THREE.Group();
+floorLamp.position.set(0.68, f2Y + 0.12, -0.95);
+floorLamp.add(mkBox(0.32, 0.06, 0.32, M.woodDark, [0, 0.03, 0], 0));
+floorLamp.add(mkBox(0.24, 0.72, 0.24, M.shojiGlow, [0, 0.42, 0], 0));
+floorLamp.add(mkBox(0.30, 0.05, 0.30, M.woodDark, [0, 0.80, 0], 0));
+innGroup.add(floorLamp);
+addWarmLight(4.5, 4.1, -3.5, 0xffc66e, 3.6, 8.8, 1.8);
+
+// 3) 矮几上摊开的旅行笔记与一副眼镜
+innGroup.add(mkBox(0.88, 0.22, 0.56, M.woodMid, [0.92, f2Y + 0.22, 0.38], 0.02));
+// 摊开的白色双页笔记本
+innGroup.add(mkBox(0.22, 0.025, 0.28, M.whiteCeramic, [0.80, f2Y + 0.35, 0.38], 0));
+innGroup.add(mkBox(0.22, 0.025, 0.28, M.whiteCeramic, [1.03, f2Y + 0.35, 0.38], 0));
+// 细框眼镜
+const glassL = new THREE.Mesh(new THREE.TorusGeometry(0.042, 0.008, 6, 12), M.rockVolcanic);
+glassL.rotation.x = Math.PI / 2; glassL.position.set(0.75, f2Y + 0.36, 0.56);
+const glassR = glassL.clone(); glassR.position.x = 0.85;
+innGroup.add(glassL, glassR);
+
+// 4) 窗边挂着的一件羽织（衣架上深靛红纹和风羽织）
+const haori = new THREE.Group();
+haori.position.set(-1.72, f2Y + 1.38, -0.55);
+haori.add(mkCyl(0.02, 0.02, 0.78, 6, M.woodDark, [0, 0.36, 0], 0));
+haori.children[0].rotation.z = Math.PI / 2;
+haori.add(mkBox(0.46, 0.76, 0.08, toonMat(0x2a3b69, { warm: true }), [0, -0.02, 0], 0.02));
+haori.add(mkBox(0.18, 0.44, 0.08, toonMat(0x2a3b69, { warm: true }), [-0.30, 0.12, 0], 0.02));
+haori.add(mkBox(0.18, 0.44, 0.08, toonMat(0x2a3b69, { warm: true }), [0.30, 0.12, 0], 0.02));
+innGroup.add(haori);
+
+// 5) 一排并列的小玻璃瓶（里面泡着琥珀色梅酒与小梅子，摆在窗台架上）
+innGroup.add(mkBox(1.25, 0.06, 0.24, M.woodLight, [1.65, f2Y + 0.85, -1.95], 0));
+for (let i = 0; i < 5; i++) {
+  const bx = 1.15 + i * 0.24;
+  innGroup.add(mkCyl(0.065, 0.065, 0.22, 8, M.glassMist, [bx, f2Y + 0.99, -1.95], 0));
+  innGroup.add(mkCyl(0.055, 0.055, 0.14, 8, toonMat(0xd98c2b, { warm: true, emissive: 0x8a4810, emissiveIntensity: 0.3 }), [bx, f2Y + 0.95, -1.95], 0));
+  innGroup.add(mkCyl(0.05, 0.05, 0.04, 8, M.vermilionDark, [bx, f2Y + 1.12, -1.95], 0));
+}
+
+// ----- 3.3 旅馆大屋顶（深灰色瓦片 + 厚蓬松积雪 + 屋檐干柿子串与成排红灯笼） -----
+const roofTopY = f2Y + 2.25;
+const gableLeft = mkBox(6.8, 0.22, 3.65, M.roofTile, [0, roofTopY + 0.72, -1.48], 0.02);
+gableLeft.rotation.x = -0.44;
+const gableRight = mkBox(6.8, 0.22, 3.65, M.roofTile, [0, roofTopY + 0.72, 1.48], 0.02);
+gableRight.rotation.x = 0.44;
+innGroup.add(gableLeft, gableRight);
+// 屋脊梁与山墙三角
+innGroup.add(mkBox(7.05, 0.28, 0.34, M.roofTile, [0, roofTopY + 1.54, 0], 0.02));
+// 厚蓬松屋顶积雪
+const snowRoofL = mkBox(6.92, 0.36, 3.74, M.snow, [0, roofTopY + 0.98, -1.52], 0.02);
+snowRoofL.rotation.x = -0.44;
+const snowRoofR = mkBox(6.92, 0.36, 3.74, M.snow, [0, roofTopY + 0.98, 1.52], 0.02);
+snowRoofR.rotation.x = 0.44;
+const snowRidge = mkCyl(0.28, 0.28, 7.0, 10, M.snow, [0, roofTopY + 1.72, 0], 0.015);
+snowRidge.rotation.z = Math.PI / 2;
+innGroup.add(snowRoofL, snowRoofR, snowRidge);
+
+// 二楼山墙封闭（左右三角墙）
+const triShape = new THREE.Shape();
+triShape.moveTo(-2.8, 0); triShape.lineTo(2.8, 0); triShape.lineTo(0, 1.52); triShape.closePath();
+const triGeo = new THREE.ExtrudeGeometry(triShape, { depth: 0.16, bevelEnabled: false });
+const gableWallW = new THREE.Mesh(triGeo, M.woodTimber);
+gableWallW.rotation.y = Math.PI / 2;
+gableWallW.position.set(-2.78, roofTopY, 0);
+const gableWallE = gableWallW.clone();
+gableWallE.position.set(2.62, roofTopY, 0);
+innGroup.add(gableWallW, gableWallE);
+
+// 屋檐挂着的一排干柿子串（一楼挑檐左侧下挂，随风轻摆）
+for (let s = 0; s < 5; s++) {
+  const persPivot = new THREE.Group();
+  persPivot.position.set(-2.65 + s * 0.26, 2.48, 2.92);
+  persPivot.add(mkCyl(0.008, 0.008, 0.62, 4, M.straw, [0, -0.31, 0], 0));
+  for (let p = 0; p < 4; p++) {
+    const pk = mkSphere(0.055, 7, 6, toonMat(0xe86c2c, { warm: true }), [0, -0.12 - p * 0.14, 0], 0.02);
+    pk.scale.set(0.95, 1.15, 0.95);
+    persPivot.add(pk);
+  }
+  innGroup.add(persPivot);
+  animSway.push({ obj: persPivot, ampX: 0.06, ampZ: 0.08, speed: 2.1 + s * 0.12, phase: s * 0.9 });
+}
+
+// 旅馆屋檐成排红灯笼
+[-2.4, -1.1, 1.1, 2.4].forEach((lx, idx) => {
+  const lan = createHangingLantern(0.9);
+  lan.position.set(lx, 2.46, 2.95);
+  innGroup.add(lan);
+  animSway.push({ obj: lan, ampX: 0.06, ampZ: 0.08, speed: 1.7 + idx * 0.1, phase: idx * 1.1 });
+});
+addWarmLight(2.4, 2.8, -0.5, 0xff7832, 2.2, 6.2, 0.5);
+addWarmLight(5.8, 2.8, -0.5, 0xff7832, 2.2, 6.2, 2.3);
+
+// ==================== 模块4：露天汤池、色块化水影着色器与庭院精致陈设 ====================
+// ----- 4.1 露天汤池水面（色块化 posterized 平涂倒影：暖金、群青、绯红碎块随波变形碎裂重组） -----
+const waterUniforms = { uTime: { value: 0 } };
+const waterMat = new THREE.ShaderMaterial({
+  transparent: true,
+  uniforms: waterUniforms,
+  vertexShader: `
+    uniform float uTime;
+    varying vec2 vUv;
+    varying vec3 vWorldPos;
+    void main() {
+      vUv = uv;
+      vec3 p = position;
+      float w1 = sin(p.x * 2.8 + uTime * 1.6) * 0.022;
+      float w2 = cos(p.y * 3.4 - uTime * 1.25) * 0.018;
+      p.z += w1 + w2;
+      vec4 wp = modelMatrix * vec4(p, 1.0);
+      vWorldPos = wp.xyz;
+      gl_Position = projectionMatrix * viewMatrix * wp;
+    }
+  `,
+  fragmentShader: `
+    uniform float uTime;
+    varying vec2 vUv;
+    varying vec3 vWorldPos;
+    float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float noise(vec2 p) {
+      vec2 i = floor(p), f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+                 mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+    }
+    void main() {
+      vec2 uv = vUv;
+      // 波形扭曲制造色块碎裂与重组感
+      float n1 = noise(uv * 6.5 + vec2(uTime * 0.35, -uTime * 0.28));
+      float n2 = noise(uv * 11.5 + vec2(-uTime * 0.42, uTime * 0.30));
+      vec2 distUv = uv + (vec2(n1, n2) - 0.5) * 0.14;
+      // 基底乳青温泉水色与群青夜空色块
+      vec3 cMilky = vec3(0.45, 0.78, 0.84);
+      vec3 cUltra = vec3(0.14, 0.24, 0.58);
+      vec3 cGold  = vec3(1.00, 0.78, 0.36);
+      vec3 cCrim  = vec3(0.92, 0.28, 0.26);
+      vec3 cFoam  = vec3(0.86, 0.97, 1.00);
+
+      // 色块化平涂（锐利阶跃边缘）
+      float skyMask = step(0.46, n1 * 0.65 + distUv.y * 0.45);
+      vec3 col = mix(cMilky, cUltra, skyMask * 0.72);
+
+      // 来自北侧旅馆窗口的暖金碎块倒影
+      float goldBand = exp(-pow((distUv.y - 0.22) * 3.8, 2.0)) * (0.45 + 0.75 * n2);
+      float goldPatch = step(0.50, goldBand + sin(distUv.x * 16.0 + uTime * 1.4) * 0.12);
+      col = mix(col, cGold, goldPatch * 0.92);
+
+      // 来自灯笼与朱红廊柱的绯红碎块倒影
+      float redSpot1 = smoothstep(0.32, 0.05, length(distUv - vec2(0.28, 0.32))) + n1 * 0.35;
+      float redSpot2 = smoothstep(0.30, 0.05, length(distUv - vec2(0.74, 0.36))) + n2 * 0.35;
+      float crimPatch = step(0.74, max(redSpot1, redSpot2));
+      col = mix(col, cCrim, crimPatch * 0.88);
+
+      // 细碎白色涟漪高光色块
+      float ripple = step(0.84, noise(uv * 16.0 + vec2(uTime * 0.5, uTime * 0.35)));
+      col = mix(col, cFoam, ripple * 0.65);
+
+      gl_FragColor = vec4(col, 0.80);
+    }
+  `
+});
+const waterSurface = new THREE.Mesh(new THREE.PlaneGeometry(5.16, 5.16, 28, 28), waterMat);
+waterSurface.rotation.x = -Math.PI / 2;
+waterSurface.position.set(5.24, 0.02, 5.24);
+diorama.add(waterSurface);
+
+// 露天汤池原石围边（北侧与西侧大块温润原石+蓬松积雪+结冰湿润边缘）
+const rimRocks = [
+  [2.55, 0.22, 2.65, 0.62], [3.35, 0.24, 2.52, 0.56], [4.25, 0.26, 2.48, 0.64],
+  [5.20, 0.24, 2.48, 0.58], [6.15, 0.26, 2.52, 0.64], [7.05, 0.22, 2.60, 0.55],
+  [2.48, 0.22, 3.55, 0.58], [2.46, 0.25, 4.45, 0.62], [2.48, 0.22, 5.40, 0.56],
+  [2.52, 0.24, 6.35, 0.60], [2.62, 0.22, 7.25, 0.54],
+];
+rimRocks.forEach(([rx, ry, rz, rr], idx) => {
+  const rk = new THREE.Mesh(new THREE.DodecahedronGeometry(rr, 0), idx % 2 === 0 ? M.rock : M.rockDark);
+  rk.position.set(rx, ry, rz);
+  rk.scale.set(1.15, 0.62, 0.95);
+  rk.rotation.set(idx * 0.3, idx * 0.9, 0.1);
+  rk.castShadow = true; rk.receiveShadow = true;
+  addOutline(rk, 0.032, true);
+  diorama.add(rk);
+  // 池石顶部蓬松雪与结冰湿润薄冰
+  const sn = mkSphere(rr * 0.72, 8, 6, M.snow, [rx, ry + rr * 0.38, rz], 0.02);
+  sn.scale.set(1.05, 0.32, 0.88);
+  diorama.add(sn);
+  if (idx % 2 === 0) {
+    const iceRim = mkBox(rr * 0.9, 0.04, rr * 0.7, M.ice, [rx + 0.16, 0.06, rz + 0.16], 0);
+    diorama.add(iceRim);
+  }
+});
+
+// 池面漂浮的小木桶与清酒托盘（一小壶清酒与两只酒杯，随波轻晃）
+const floatTrayGroup = new THREE.Group();
+floatTrayGroup.position.set(4.65, 0.05, 4.85);
+diorama.add(floatTrayGroup);
+// 木质浮盘
+floatTrayGroup.add(mkCyl(0.38, 0.35, 0.06, 14, M.woodLight, [0, 0.02, 0], 0.025));
+// 清酒德利（小酒壶）
+floatTrayGroup.add(mkSphere(0.085, 10, 8, M.whiteCeramic, [-0.08, 0.13, -0.04], 0.02));
+floatTrayGroup.add(mkCyl(0.032, 0.045, 0.12, 8, M.whiteCeramic, [-0.08, 0.24, -0.04], 0.02));
+// 两只清酒杯（お猪口）
+floatTrayGroup.add(mkCyl(0.045, 0.034, 0.065, 8, M.whiteCeramic, [0.14, 0.08, 0.06], 0.02));
+floatTrayGroup.add(mkCyl(0.045, 0.034, 0.065, 8, M.vermilion, [0.06, 0.08, 0.17], 0.02));
+// 漂浮小木桶（汤桶）
+const woodBucket = new THREE.Group();
+woodBucket.position.set(5.95, 0.06, 4.35);
+woodBucket.add(mkCyl(0.24, 0.21, 0.20, 12, M.woodLight, [0, 0.10, 0], 0.025));
+woodBucket.add(new THREE.Mesh(new THREE.TorusGeometry(0.228, 0.015, 6, 14), M.gold));
+woodBucket.children[1].rotation.x = Math.PI / 2;
+woodBucket.children[1].position.y = 0.12;
+diorama.add(woodBucket);
+
+// 竹制引水筧（汤池北缘冒着蒸汽、向池中注入温泉水）
+const kakehi = new THREE.Group();
+kakehi.position.set(6.75, 0.55, 2.75);
+diorama.add(kakehi);
+kakehi.add(mkCyl(0.075, 0.085, 0.95, 8, M.bamboo, [0, 0.12, -0.15], 0.02));
+const spoutBamboo = mkCyl(0.068, 0.068, 1.05, 8, M.bamboo, [0, 0.45, 0.26], 0.02);
+spoutBamboo.rotation.x = Math.PI / 2 + 0.18;
+kakehi.add(spoutBamboo);
+// 水柱落入汤池
+const waterJet = mkCyl(0.028, 0.045, 0.65, 8, M.ice, [0, 0.08, 0.72], 0);
+waterJet.rotation.x = -0.18;
+kakehi.add(waterJet);
+// 池边暖灯
+addWarmLight(5.2, 1.35, 4.6, 0xffaa4d, 2.6, 7.6, 1.4);
+
+// 池边围出私密感的竹栅栏（汤池西侧与北侧一角）
+const fenceGroup = new THREE.Group();
+diorama.add(fenceGroup);
+for (let i = 0; i < 11; i++) {
+  const bz = 2.8 + i * 0.42;
+  fenceGroup.add(mkCyl(0.048, 0.052, 1.48, 6, M.bamboo, [2.05, 0.85, bz], 0.02));
+}
+fenceGroup.add(mkBox(0.08, 0.09, 4.5, M.bamboo, [2.05, 1.38, 4.9], 0.015));
+fenceGroup.add(mkBox(0.08, 0.09, 4.5, M.bamboo, [2.05, 0.68, 4.9], 0.015));
+fenceGroup.add(mkBox(0.14, 0.09, 4.55, M.snow, [2.05, 1.62, 4.9], 0.012));
+
+// ----- 4.2 结冰湿润石板路（带色块化平涂暖光反光） -----
+const wetStoneMat = new THREE.ShaderMaterial({
+  uniforms: { uTime: waterUniforms.uTime },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+  `,
+  fragmentShader: `
+    varying vec2 vUv;
+    void main() {
+      vec3 base = vec3(0.22, 0.28, 0.46);
+      vec3 gold = vec3(0.98, 0.74, 0.36);
+      vec3 crim = vec3(0.88, 0.30, 0.28);
+      float gMask = step(0.45, sin(vUv.x * 6.0) * cos(vUv.y * 5.0) + 0.55);
+      float rMask = step(0.76, sin(vUv.x * 11.0 + 1.2) * 0.5 + 0.5);
+      vec3 col = mix(base, gold, gMask * 0.55);
+      col = mix(col, crim, rMask * 0.38);
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `
+});
+const steppingStones = [
+  [1.6, 0.50, 2.1], [2.2, 0.50, 1.5], [2.8, 0.50, 0.9], [3.5, 0.50, 0.3],
+  [4.1, 0.50, -0.3], [1.4, 0.30, 3.3], [1.4, 0.30, 4.3], [1.4, 0.30, 5.3],
+];
+steppingStones.forEach(([sx, sy, sz], i) => {
+  const st = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.45, 0.07, 7), i % 2 === 0 ? wetStoneMat : M.rock);
+  st.position.set(sx, sy, sz);
+  st.rotation.y = i * 0.6;
+  addOutline(st, 0.025, true);
+  diorama.add(st);
+});
+
+// ----- 4.3 庭院周边元素与“人刚离开的痕迹” -----
+// 1) 汤池边木架：整齐叠放的浴衣 + 并排的一双木屐
+const rackGroup = new THREE.Group();
+rackGroup.position.set(2.85, 0.50, 1.85);
+diorama.add(rackGroup);
+rackGroup.add(mkBox(0.88, 0.07, 0.48, M.woodMid, [0, 0.52, 0], 0.02));
+[[-0.36, -0.18], [0.36, -0.18], [-0.36, 0.18], [0.36, 0.18]].forEach(([x, z]) => {
+  rackGroup.add(mkBox(0.06, 0.52, 0.06, M.woodDark, [x, 0.26, z], 0));
+});
+// 叠放好的青蓝和风浴衣+红色腰带
+rackGroup.add(mkBox(0.48, 0.14, 0.34, toonMat(0x3a6494, { warm: true }), [-0.12, 0.62, 0], 0.02));
+rackGroup.add(mkBox(0.49, 0.05, 0.11, M.redCloth, [-0.12, 0.65, 0], 0));
+// 旁边并排一双木屐
+function createGeta(x, y, z, rotY = 0, parent = diorama) {
+  const g = new THREE.Group();
+  g.position.set(x, y, z);
+  g.rotation.y = rotY;
+  [-0.08, 0.08].forEach((ox) => {
+    g.add(mkBox(0.11, 0.035, 0.24, M.woodLight, [ox, 0.055, 0], 0.02));
+    g.add(mkBox(0.10, 0.04, 0.035, M.woodMid, [ox, 0.02, -0.05], 0));
+    g.add(mkBox(0.10, 0.04, 0.035, M.woodMid, [ox, 0.02, 0.06], 0));
+    g.add(mkBox(0.08, 0.03, 0.03, M.redCloth, [ox, 0.08, 0.03], 0));
+  });
+  parent.add(g);
+}
+createGeta(0.28, 0.56, 0.02, 0.12, rackGroup);
+
+// 旅馆檐廊下整齐摆放的一排木屐（4双）
+for (let i = 0; i < 4; i++) {
+  createGeta(2.5 + i * 0.46, 0.50, -0.75, 0.02 * (i - 1.5), diorama);
+}
+
+// 2) 旅馆门口雪地上的清晰脚印 -> 通向立在雪里的红油纸伞
+const footPrintMat = toonMat(0x566da8, { snow: true });
+const footCoords = [
+  [4.15, 0.49, -0.25], [4.38, 0.49, 0.20], [4.08, 0.49, 0.62],
+  [4.32, 0.49, 1.05], [4.75, 0.49, 1.38], [5.28, 0.49, 1.55],
+  [5.85, 0.49, 1.48], [6.42, 0.49, 1.25], [6.88, 0.49, 0.92],
+];
+footCoords.forEach(([fx, fy, fz], idx) => {
+  const fp = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.09, 0.02, 8), footPrintMat);
+  fp.scale.set(0.75, 1, 1.45);
+  fp.position.set(fx, fy, fz);
+  fp.rotation.y = idx < 4 ? 0.15 : 1.1;
+  diorama.add(fp);
+});
+// 脚印尽头立在雪里的红油纸伞（和伞，微倾插在雪中）
+const umbrella = new THREE.Group();
+umbrella.position.set(7.15, 0.48, 0.65);
+umbrella.rotation.set(0.28, 0.35, -0.22);
+diorama.add(umbrella);
+umbrella.add(mkCyl(0.022, 0.024, 1.32, 8, M.bamboo, [0, 0.66, 0], 0.02));
+const canopy = new THREE.Mesh(new THREE.ConeGeometry(0.76, 0.34, 14), M.vermilion);
+canopy.position.set(0, 1.18, 0);
+canopy.castShadow = true;
+addOutline(canopy, 0.025, true);
+umbrella.add(canopy);
+// 伞面一点薄雪与中央白环
+const umbRing = new THREE.Mesh(new THREE.ConeGeometry(0.46, 0.21, 14), M.whiteCeramic);
+umbRing.position.set(0, 1.25, 0);
+umbrella.add(umbRing);
+const umbSnow = mkSphere(0.32, 8, 6, M.snow, [0.18, 1.24, 0.10], 0.015);
+umbSnow.scale.set(1.1, 0.28, 0.9);
+umbrella.add(umbSnow);
+
+// 3) 堆着柴火的木架（旅馆右侧檐下 X=7.25, Z=-2.4）
+const woodRack = new THREE.Group();
+woodRack.position.set(7.25, 0.48, -2.55);
+diorama.add(woodRack);
+woodRack.add(mkBox(0.55, 1.12, 0.07, M.woodDark, [0, 0.56, -0.68], 0.02));
+woodRack.add(mkBox(0.55, 1.12, 0.07, M.woodDark, [0, 0.56, 0.68], 0.02));
+woodRack.add(mkBox(0.68, 0.08, 1.56, M.woodMid, [0, 1.14, 0], 0.02));
+woodRack.add(mkBox(0.70, 0.12, 1.58, M.snow, [0, 1.23, 0], 0.015));
+for (let row = 0; row < 4; row++) {
+  for (let col = 0; col < 5; col++) {
+    const log = mkCyl(0.075, 0.075, 0.48, 7, col % 2 === 0 ? M.woodMid : M.woodLight, [0, 0.14 + row * 0.16, -0.48 + col * 0.24], 0.015);
+    log.rotation.z = Math.PI / 2;
+    woodRack.add(log);
+  }
+}
+
+// 4) 庭院烧着炭火的小火盆（X=5.45, Z=-0.35）
+const brazier = new THREE.Group();
+brazier.position.set(5.45, 0.50, -0.35);
+diorama.add(brazier);
+brazier.add(mkCyl(0.34, 0.26, 0.42, 12, M.rockVolcanic, [0, 0.21, 0], 0.025));
+brazier.add(mkCyl(0.26, 0.26, 0.06, 10, toonMat(0x525260), [0, 0.40, 0], 0));
+for (let i = 0; i < 4; i++) {
+  brazier.add(mkBox(0.09, 0.06, 0.08, M.charcoalGlow, [(i - 1.5) * 0.06, 0.44, ((i % 2) - 0.5) * 0.08], 0));
+}
+addWarmLight(5.45, 1.25, -0.35, 0xff6b24, 1.8, 4.8, 3.7);
+
+// 5) 被雪压弯的南天竹（红果）与山茶花（红花从雪里探出）
+function createWinterShrub(x, y, z, isCamellia = false) {
+  const g = new THREE.Group();
+  g.position.set(x, y, z);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    const stem = mkCyl(0.022, 0.03, 0.72, 5, M.woodDark, [Math.cos(a) * 0.14, 0.34, Math.sin(a) * 0.14], 0);
+    stem.rotation.z = -Math.cos(a) * 0.38;
+    stem.rotation.x = Math.sin(a) * 0.38;
+    g.add(stem);
+    const leaf = mkSphere(0.24, 8, 6, M.pine, [Math.cos(a) * 0.28, 0.58, Math.sin(a) * 0.28], 0.02);
+    leaf.scale.set(1.1, 0.65, 1.1);
+    g.add(leaf);
+    const sn = mkSphere(0.20, 7, 5, M.snow, [Math.cos(a) * 0.28, 0.70, Math.sin(a) * 0.28], 0.015);
+    sn.scale.set(1.1, 0.38, 1.1);
+    g.add(sn);
+    // 红果簇或红色山茶花从雪下探出
+    if (isCamellia) {
+      g.add(mkSphere(0.085, 8, 6, M.vermilion, [Math.cos(a) * 0.40, 0.60, Math.sin(a) * 0.40], 0.02));
+      g.add(mkSphere(0.032, 6, 5, M.gold, [Math.cos(a) * 0.46, 0.61, Math.sin(a) * 0.46], 0));
+    } else {
+      for (let b = 0; b < 3; b++) {
+        g.add(mkSphere(0.038, 6, 5, M.vermilion, [Math.cos(a) * 0.36 + (b - 1) * 0.05, 0.55 - b * 0.04, Math.sin(a) * 0.36], 0));
+      }
+    }
+  }
+  diorama.add(g);
+}
+createWinterShrub(1.25, 0.48, 0.45, false); // 南天竹
+createWinterShrub(7.20, 0.48, 1.85, true);  // 山茶花
+createWinterShrub(1.45, 0.48, -1.65, true); // 山茶花
+
+// 庭院立杆小灯笼（沿庭院边照亮雪地）
+[[1.65, 0.48, 1.25], [6.65, 0.48, 2.05]].forEach(([lx, ly, lz], i) => {
+  diorama.add(mkBox(0.09, 1.65, 0.09, M.woodDark, [lx, ly + 0.82, lz], 0.02));
+  const lan = createHangingLantern(0.85);
+  lan.position.set(lx + 0.16, ly + 1.56, lz);
+  diorama.add(lan);
+  animSway.push({ obj: lan, ampX: 0.07, ampZ: 0.08, speed: 1.9, phase: i * 2.1 });
+});
+
+// ==================== 模块5：底座高处杉树林、落叶樱树枯枝、山顶小祠与偶发小狐狸 ====================
+// 1) 被雪压低枝条的杉树（层叠圆锥针叶 + 厚积雪压弯感）
+function createCedarTree(x, y, z, scale = 1.0) {
+  const g = new THREE.Group();
+  g.position.set(x, y, z);
+  g.scale.setScalar(scale);
+  g.add(mkCyl(0.11, 0.17, 1.4, 7, M.woodDark, [0, 0.7, 0], 0.025));
+  const tiers = [
+    { y: 1.45, r: 1.15, h: 1.25 },
+    { y: 2.35, r: 0.92, h: 1.18 },
+    { y: 3.18, r: 0.68, h: 1.08 },
+    { y: 3.88, r: 0.42, h: 0.85 },
+  ];
+  tiers.forEach((t, idx) => {
+    const foliage = new THREE.Mesh(new THREE.ConeGeometry(t.r, t.h, 8), idx % 2 === 0 ? M.pine : M.pineDark);
+    foliage.position.y = t.y;
+    foliage.castShadow = true; foliage.receiveShadow = true;
+    addOutline(foliage, 0.026, true);
+    g.add(foliage);
+    // 枝条上的厚积雪（稍稍下垂盖住针叶上缘）
+    const sn = new THREE.Mesh(new THREE.ConeGeometry(t.r * 0.95, t.h * 0.56, 8), M.snow);
+    sn.position.y = t.y + t.h * 0.25;
+    sn.scale.set(1.04, 1.0, 1.04);
+    g.add(sn);
+  });
+  diorama.add(g);
+}
+
+const cedarSpecs = [
+  [-6.8, 5.38, -2.5, 1.05], [-5.2, 5.38, -2.2, 0.88], [-7.0, 5.38, -5.2, 1.18],
+  [-4.8, 5.38, -6.9, 1.12], [-2.2, 5.38, -6.8, 0.96], [-1.0, 5.38, -3.2, 0.84],
+  [-3.2, 5.38, -2.1, 0.78], [-6.1, 5.38, -6.8, 0.92],
+];
+cedarSpecs.forEach(([x, y, z, s]) => createCedarTree(x, y, z, s));
+
+// 2) 几株落叶的樱树枯枝（分叉黑褐枝干 + 枝杈积雪）
+function createBareSakura(x, y, z, scale = 1.0, rotY = 0) {
+  const g = new THREE.Group();
+  g.position.set(x, y, z);
+  g.rotation.y = rotY;
+  g.scale.setScalar(scale);
+  const trunk = mkCyl(0.08, 0.14, 1.55, 7, M.woodDark, [0, 0.75, 0], 0.025);
+  trunk.rotation.z = 0.08;
+  g.add(trunk);
+  const branches = [
+    { p: [-0.36, 1.55, 0.12], r: [0.22, 0, 0.72], len: 1.15 },
+    { p: [0.38, 1.62, -0.10], r: [-0.18, 0, -0.68], len: 1.20 },
+    { p: [0.05, 1.72, 0.36], r: [0.65, 0, -0.12], len: 0.98 },
+    { p: [-0.15, 1.85, -0.32], r: [-0.58, 0, 0.25], len: 0.92 },
+  ];
+  branches.forEach((b) => {
+    const br = mkCyl(0.024, 0.055, b.len, 6, M.woodDark, b.p, 0.02);
+    br.rotation.set(b.r[0], b.r[1], b.r[2]);
+    g.add(br);
+    const sn = mkBox(0.05, b.len * 0.65, 0.04, M.snow, [b.p[0], b.p[1] + 0.04, b.p[2]], 0);
+    sn.rotation.set(b.r[0], b.r[1], b.r[2]);
+    g.add(sn);
+  });
+  diorama.add(g);
+}
+createBareSakura(-1.6, 5.38, -5.1, 1.08, 0.4);
+createBareSakura(-0.6, 3.85, -0.8, 0.92, 1.7);
+createBareSakura(0.6, 0.50, -5.6, 1.05, 2.5);
+
+// 3) 林间隐约露出的覆雪山顶小祠（X=-3.65, Y=5.40, Z=-5.0）
+const shrine = new THREE.Group();
+shrine.position.set(-3.65, 5.40, -5.05);
+shrine.rotation.y = 0.42;
+diorama.add(shrine);
+shrine.add(mkBox(1.45, 0.22, 1.35, M.rock, [0, 0.11, 0], 0.025));
+shrine.add(mkBox(0.92, 0.88, 0.82, M.woodMid, [0, 0.65, 0], 0.025));
+// 小祠朱红门框与微弱暖光
+shrine.add(mkBox(0.42, 0.56, 0.06, M.vermilion, [0, 0.56, 0.42], 0.02));
+shrine.add(mkBox(0.24, 0.32, 0.07, M.lanternWarm, [0, 0.58, 0.43], 0));
+// 覆厚雪人字屋顶
+const shRoofL = mkBox(1.38, 0.14, 0.92, M.roofTile, [0, 1.24, -0.34], 0.02);
+shRoofL.rotation.x = -0.52;
+const shRoofR = mkBox(1.38, 0.14, 0.92, M.roofTile, [0, 1.24, 0.34], 0.02);
+shRoofR.rotation.x = 0.52;
+const shSnowL = mkBox(1.44, 0.18, 0.96, M.snow, [0, 1.36, -0.35], 0.015);
+shSnowL.rotation.x = -0.52;
+const shSnowR = mkBox(1.44, 0.18, 0.96, M.snow, [0, 1.36, 0.35], 0.015);
+shSnowR.rotation.x = 0.52;
+shrine.add(shRoofL, shRoofR, shSnowL, shSnowR);
+addWarmLight(-3.65, 6.25, -4.55, 0xffaa44, 1.5, 4.6, 4.1);
+
+// 4) 极偶发事件：远景山腰森林里小跑而过的小狐狸剪影 + 留下一行小脚印随后消散
+const foxGroup = new THREE.Group();
+const foxMat = toonMat(0x1b213b); // 剪影感深蓝黑微带暖尾尖
+const foxBody = mkBox(0.24, 0.22, 0.52, foxMat, [0, 0.28, 0], 0.02);
+const foxHead = mkSphere(0.13, 8, 6, foxMat, [0, 0.40, 0.28], 0.02);
+const foxSnout = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.18, 6), foxMat);
+foxSnout.rotation.x = Math.PI / 2; foxSnout.position.set(0, 0.38, 0.41);
+const foxEarL = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.12, 4), foxMat);
+foxEarL.position.set(-0.07, 0.52, 0.26);
+const foxEarR = foxEarL.clone(); foxEarR.position.x = 0.07;
+const foxTail = mkSphere(0.11, 8, 6, foxMat, [0, 0.34, -0.38], 0.02);
+foxTail.scale.set(0.75, 0.75, 1.9);
+const foxTailTip = mkSphere(0.06, 6, 5, M.snow, [0, 0.35, -0.54], 0);
+const foxLegs = [];
+[[-0.08, 0.15], [0.08, 0.15], [-0.08, -0.16], [0.08, -0.16]].forEach(([lx, lz]) => {
+  const leg = mkCyl(0.025, 0.022, 0.24, 5, foxMat, [lx, 0.12, lz], 0);
+  foxGroup.add(leg);
+  foxLegs.push(leg);
+});
+foxGroup.add(foxBody, foxHead, foxSnout, foxEarL, foxEarR, foxTail, foxTailTip);
+foxGroup.visible = false;
+diorama.add(foxGroup);
+
+// 小狐狸雪地脚印池
+const foxPrints = [];
+for (let i = 0; i < 16; i++) {
+  const fp = new THREE.Mesh(
+    new THREE.CircleGeometry(0.06, 6),
+    new THREE.MeshBasicMaterial({ color: 0x4b5f9e, transparent: true, opacity: 0 })
+  );
+  fp.rotation.x = -Math.PI / 2;
+  fp.position.y = 5.43;
+  diorama.add(fp);
+  foxPrints.push({ mesh: fp, age: 99 });
+}
+const foxState = {
+  active: false, t: 0, dur: 6.2, nextTrigger: 11.0,
+  nextPrintIdx: 0, printTimer: 0,
+  start: new THREE.Vector3(-7.4, 5.42, -3.55),
+  end: new THREE.Vector3(-0.35, 5.42, -4.15),
+};
+
+// ==================== 模块6：蒸汽、飘雪、屋檐吹雪、炭火火星与主动画循环 ====================
+// 1) 柔和半透明蒸汽贴图与粒子池（汤池、竹筧、地热泉眼、大厅铁壶、自动贩卖机、罐装热饮）
+const steamCanvas = document.createElement('canvas');
+steamCanvas.width = 96; steamCanvas.height = 96;
+const sctx = steamCanvas.getContext('2d');
+const sg = sctx.createRadialGradient(48, 48, 4, 48, 48, 46);
+sg.addColorStop(0, 'rgba(236, 248, 255, 0.52)');
+sg.addColorStop(0.55, 'rgba(205, 228, 252, 0.22)');
+sg.addColorStop(1, 'rgba(180, 210, 250, 0.0)');
+sctx.fillStyle = sg; sctx.fillRect(0, 0, 96, 96);
+const steamTex = new THREE.CanvasTexture(steamCanvas);
+
+function spawnSteamEmitter(origin, count, spread, maxH, minScale, maxScale, speed) {
+  for (let i = 0; i < count; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: steamTex, transparent: true, depthWrite: false, opacity: 0.45
+    }));
+    diorama.add(sp);
+    animSteam.push({
+      sprite: sp, origin, spread, maxH, minScale, maxScale, speed,
+      life: Math.random(),
+      ox: (Math.random() - 0.5) * spread,
+      oz: (Math.random() - 0.5) * spread,
+      rotSpeed: (Math.random() - 0.5) * 0.9,
+      driftX: 0.16 + Math.random() * 0.16,
+    });
+  }
+}
+// 露天汤池蒸汽
+spawnSteamEmitter(new THREE.Vector3(5.2, 0.15, 5.2), 24, 3.8, 3.2, 0.9, 2.35, 0.24);
+// 竹制引水筧蒸汽
+spawnSteamEmitter(new THREE.Vector3(6.75, 0.72, 3.2), 7, 0.55, 1.9, 0.45, 1.15, 0.34);
+// 地热泉眼细微白气（右侧剖面）
+spawnSteamEmitter(new THREE.Vector3(8.18, -2.25, 1.85), 6, 0.35, 1.8, 0.35, 0.92, 0.32);
+// 旅馆大厅铁壶蒸汽
+spawnSteamEmitter(new THREE.Vector3(3.75, 1.52, -3.20), 5, 0.22, 1.1, 0.22, 0.62, 0.42);
+// 站台自动贩卖机热气
+spawnSteamEmitter(new THREE.Vector3(-6.15, 3.95, 2.75), 5, 0.38, 1.25, 0.28, 0.72, 0.38);
+// 长椅罐装热饮微弱热气
+spawnSteamEmitter(new THREE.Vector3(-4.33, 3.42, 3.80), 3, 0.10, 0.62, 0.14, 0.34, 0.48);
+
+// 2) 细小雪花飘落系统（落在汤池水面瞬间融化消失）
+const SNOW_COUNT = 560;
+const snowPos = new Float32Array(SNOW_COUNT * 3);
+const snowVel = [];
+function resetSnowFlake(i, randomY = false) {
+  snowPos[i * 3] = (Math.random() - 0.5) * 24;
+  snowPos[i * 3 + 1] = randomY ? Math.random() * 16 : 14 + Math.random() * 4;
+  snowPos[i * 3 + 2] = (Math.random() - 0.5) * 24;
+  snowVel[i] = {
+    vy: 0.55 + Math.random() * 0.55,
+    vx: 0.12 + Math.random() * 0.18,
+    vz: (Math.random() - 0.5) * 0.15,
+    phase: Math.random() * 6.28
+  };
+}
+for (let i = 0; i < SNOW_COUNT; i++) resetSnowFlake(i, true);
+const snowGeo = new THREE.BufferGeometry();
+snowGeo.setAttribute('position', new THREE.BufferAttribute(snowPos, 3));
+const snowDotCanvas = document.createElement('canvas');
+snowDotCanvas.width = 32; snowDotCanvas.height = 32;
+const sdctx = snowDotCanvas.getContext('2d');
+const sdg = sdctx.createRadialGradient(16, 16, 2, 16, 16, 15);
+sdg.addColorStop(0, 'rgba(255,255,255,1)');
+sdg.addColorStop(0.65, 'rgba(220,240,255,0.85)');
+sdg.addColorStop(1, 'rgba(220,240,255,0)');
+sdctx.fillStyle = sdg; sdctx.fillRect(0, 0, 32, 32);
+const snowPoints = new THREE.Points(snowGeo, new THREE.PointsMaterial({
+  map: new THREE.CanvasTexture(snowDotCanvas),
+  size: 0.22,
+  transparent: true,
+  depthWrite: false,
+  opacity: 0.92,
+}));
+scene.add(snowPoints);
+
+// 3) 偶尔一阵风吹落屋檐雪粉（旅馆屋檐与站台屋檐交替吹散雪粉粒子）
+const EAVE_PARTICLES = 36;
+const eavePos = new Float32Array(EAVE_PARTICLES * 3);
+const eaveGeo = new THREE.BufferGeometry();
+eaveGeo.setAttribute('position', new THREE.BufferAttribute(eavePos, 3));
+const eavePoints = new THREE.Points(eaveGeo, new THREE.PointsMaterial({
+  map: new THREE.CanvasTexture(snowDotCanvas),
+  size: 0.18,
+  transparent: true,
+  depthWrite: false,
+  opacity: 0.0,
+}));
+diorama.add(eavePoints);
+const eaveGust = { active: false, t: 0, dur: 2.2, next: 5.5, particles: [] };
+for (let i = 0; i < EAVE_PARTICLES; i++) {
+  eaveGust.particles.push({ sx: 0, sy: 0, sz: 0, vx: 0, vy: 0, vz: 0 });
+}
+
+// 4) 地炉炭火偶尔迸出的一点火星
+for (let i = 0; i < 6; i++) {
+  const sp = new THREE.Mesh(
+    new THREE.BoxGeometry(0.032, 0.032, 0.032),
+    new THREE.MeshBasicMaterial({ color: 0xffb347 })
+  );
+  sp.visible = false;
+  diorama.add(sp);
+  animSparks.push({ mesh: sp, life: 0, maxLife: 0.7, vx: 0, vy: 0, vz: 0, wait: Math.random() * 4 });
+}
+
+// ==================== 主动画循环 ====================
+const clock = new THREE.Clock();
+let elapsed = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  elapsed += dt;
+
+  // 星空与水波/倒影着色器时间
+  starMat.uniforms.uTime.value = elapsed;
+  waterUniforms.uTime.value = elapsed;
+
+  // 1) 池底气泡缓缓升起
+  for (const b of animBubbles) {
+    b.mesh.position.y += b.speed * dt;
+    b.mesh.position.x = b.baseX + Math.sin(elapsed * 2.4 + b.phase) * 0.05;
+    b.mesh.position.z = b.baseZ + Math.cos(elapsed * 2.1 + b.phase) * 0.05;
+    if (b.mesh.position.y > -0.02) b.mesh.position.y = -1.75;
+  }
+
+  // 2) 池底红白锦鲤缓缓游动与摆尾
+  for (const k of animKoi) {
+    const a = elapsed * k.speed + k.phase;
+    const nx = k.cx + Math.cos(a) * k.radius;
+    const nz = k.cz + Math.sin(a) * (k.radius * 0.82);
+    const dx = -Math.sin(a) * k.speed * k.radius;
+    const dz = Math.cos(a) * k.speed * (k.radius * 0.82);
+    k.group.position.set(nx, k.depthY + Math.sin(elapsed * 1.4 + k.phase) * 0.05, nz);
+    k.group.rotation.y = Math.atan2(dx, dz);
+    k.tail.rotation.y = Math.sin(elapsed * 7.5 + k.phase) * 0.36;
+  }
+
+  // 3) 汤池浮盘与小木桶随水波轻晃
+  floatTrayGroup.position.y = 0.045 + Math.sin(elapsed * 1.8) * 0.018;
+  floatTrayGroup.rotation.z = Math.sin(elapsed * 1.35) * 0.05;
+  floatTrayGroup.rotation.x = Math.cos(elapsed * 1.1) * 0.04;
+  woodBucket.position.y = 0.055 + Math.cos(elapsed * 1.65 + 1.1) * 0.02;
+  woodBucket.rotation.z = Math.cos(elapsed * 1.4) * 0.06;
+
+  // 4) 蒸汽缓缓升腾、飘散、旋转
+  for (const st of animSteam) {
+    st.life += dt * st.speed;
+    if (st.life >= 1) {
+      st.life = 0;
+      st.ox = (Math.random() - 0.5) * st.spread;
+      st.oz = (Math.random() - 0.5) * st.spread;
+    }
+    const p = st.life;
+    st.sprite.position.set(
+      st.origin.x + st.ox + p * st.driftX + Math.sin(elapsed * 0.9 + st.ox * 3) * 0.14,
+      st.origin.y + p * st.maxH,
+      st.origin.z + st.oz + Math.cos(elapsed * 0.8 + st.oz * 3) * 0.10
+    );
+    const sc = st.minScale + (st.maxScale - st.minScale) * p;
+    st.sprite.scale.set(sc, sc, 1);
+    st.sprite.material.rotation += st.rotSpeed * dt;
+    st.sprite.material.opacity = Math.sin(p * Math.PI) * 0.44;
+  }
+
+  // 5) 细小雪花缓缓飘落，落到汤池水面区域(X: 2.6..7.8, Z: 2.6..7.8, Y<=0.18)瞬间融化重置
+  const spArr = snowGeo.attributes.position.array;
+  for (let i = 0; i < SNOW_COUNT; i++) {
+    const v = snowVel[i];
+    spArr[i * 3] += (v.vx + Math.sin(elapsed * 0.85 + v.phase) * 0.16) * dt;
+    spArr[i * 3 + 1] -= v.vy * dt;
+    spArr[i * 3 + 2] += (v.vz + Math.cos(elapsed * 0.75 + v.phase) * 0.12) * dt;
+    const x = spArr[i * 3], y = spArr[i * 3 + 1], z = spArr[i * 3 + 2];
+    const inPool = x > 2.55 && x < 7.9 && z > 2.55 && z < 7.9 && y <= 0.22;
+    if (inPool || y < -3.6) resetSnowFlake(i, false);
+  }
+  snowGeo.attributes.position.needsUpdate = true;
+
+  // 6) 偶发阵风把雪粉从屋檐吹落
+  if (!eaveGust.active) {
+    eaveGust.next -= dt;
+    if (eaveGust.next <= 0) {
+      eaveGust.active = true;
+      eaveGust.t = 0;
+      const fromInn = Math.random() > 0.45;
+      for (let i = 0; i < EAVE_PARTICLES; i++) {
+        const p = eaveGust.particles[i];
+        p.sx = fromInn ? (1.2 + Math.random() * 5.8) : (-6.4 + Math.random() * 3.8);
+        p.sy = fromInn ? 6.0 : 5.1;
+        p.sz = fromInn ? (-0.7 + (Math.random() - 0.5) * 0.3) : (3.85 + (Math.random() - 0.5) * 0.25);
+        p.vx = 0.65 + Math.random() * 0.85;
+        p.vy = -0.35 - Math.random() * 0.45;
+        p.vz = 0.35 + Math.random() * 0.65;
+      }
+    }
+  } else {
+    eaveGust.t += dt;
+    const u = eaveGust.t / eaveGust.dur;
+    const arr = eaveGeo.attributes.position.array;
+    for (let i = 0; i < EAVE_PARTICLES; i++) {
+      const p = eaveGust.particles[i];
+      arr[i * 3] = p.sx + p.vx * eaveGust.t;
+      arr[i * 3 + 1] = p.sy + p.vy * eaveGust.t - 0.42 * eaveGust.t * eaveGust.t;
+      arr[i * 3 + 2] = p.sz + p.vz * eaveGust.t;
+    }
+    eaveGeo.attributes.position.needsUpdate = true;
+    eavePoints.material.opacity = Math.sin(Math.min(u, 1) * Math.PI) * 0.85;
+    if (u >= 1) {
+      eaveGust.active = false;
+      eavePoints.material.opacity = 0;
+      eaveGust.next = 6.5 + Math.random() * 7.5;
+    }
+  }
+
+  // 7) 红灯笼、暖帘、干柿子串与围巾随微风轻摆
+  const windPulse = 0.72 + 0.28 * Math.sin(elapsed * 0.55);
+  for (const s of animSway) {
+    s.obj.rotation.x = Math.sin(elapsed * s.speed + s.phase) * s.ampX * windPulse;
+    s.obj.rotation.z = Math.cos(elapsed * s.speed * 0.85 + s.phase) * s.ampZ * windPulse;
+  }
+
+  // 8) 两只索道方形缆车沿钢缆缓慢往返 + 轻晃
+  const pA = 0.5 - 0.44 * Math.cos(elapsed * 0.14);
+  const pB = 1.0 - pA;
+  gondolaA.root.position.lerpVectors(cableAStart, cableAEnd, pA);
+  gondolaB.root.position.lerpVectors(cableBStart, cableBEnd, pB);
+  gondolaA.swing.rotation.z = Math.sin(elapsed * 1.4) * 0.045;
+  gondolaA.swing.rotation.x = Math.cos(elapsed * 1.1) * 0.035;
+  gondolaB.swing.rotation.z = Math.sin(elapsed * 1.4 + 2.0) * 0.045;
+  gondolaB.swing.rotation.x = Math.cos(elapsed * 1.1 + 2.0) * 0.035;
+
+  // 9) 窗口与灯笼暖光极轻微呼吸式闪烁
+  for (const fl of flickerLights) {
+    const wave = Math.sin(elapsed * 3.2 + fl.phase) * 0.055 + Math.sin(elapsed * 7.8 + fl.phase * 1.7) * 0.025;
+    fl.light.intensity = fl.base * (1 + wave);
+  }
+
+  // 10) 地炉炭火偶尔迸出火星
+  for (const sp of animSparks) {
+    if (sp.wait > 0) {
+      sp.wait -= dt;
+      if (sp.wait <= 0) {
+        sp.life = 0;
+        sp.mesh.visible = true;
+        sp.mesh.position.set(3.6 + (Math.random() - 0.5) * 0.28, 1.05, -3.2 + (Math.random() - 0.5) * 0.28);
+        sp.vx = (Math.random() - 0.5) * 0.35;
+        sp.vy = 0.65 + Math.random() * 0.45;
+        sp.vz = (Math.random() - 0.5) * 0.35;
+      }
+    } else {
+      sp.life += dt;
+      sp.mesh.position.x += sp.vx * dt;
+      sp.mesh.position.y += sp.vy * dt;
+      sp.mesh.position.z += sp.vz * dt;
+      sp.vy -= 0.45 * dt;
+      const s = Math.max(0.01, 1 - sp.life / sp.maxLife);
+      sp.mesh.scale.setScalar(s);
+      if (sp.life >= sp.maxLife) {
+        sp.mesh.visible = false;
+        sp.wait = 1.8 + Math.random() * 4.5;
+      }
+    }
+  }
+
+  // 11) 地炉旁三花猫偶尔抖耳朵与甩尾巴
+  const earWindow = elapsed % 5.4;
+  catEarL.rotation.z = earWindow < 0.28 ? Math.sin(earWindow * 36) * 0.32 : 0;
+  catEarR.rotation.z = earWindow > 0.12 && earWindow < 0.40 ? Math.sin(earWindow * 32) * 0.28 : 0;
+  const tailWindow = (elapsed + 2.3) % 6.8;
+  catTailPivot.rotation.y = tailWindow < 1.1 ? Math.sin(tailWindow * 6.5) * 0.42 : Math.sin(elapsed * 0.8) * 0.06;
+
+  // 12) 天际偶尔划过一颗流星
+  if (!meteorState.active) {
+    meteorState.next -= dt;
+    if (meteorState.next <= 0) {
+      meteorState.active = true;
+      meteorState.t = 0;
+      meteorState.start.set(-35 + Math.random() * 55, 36 + Math.random() * 18, -82);
+      meteorState.dir.set(34, -14, 4);
+    }
+  } else {
+    meteorState.t += dt;
+    const u = meteorState.t / meteorState.dur;
+    meteorLine.position.copy(meteorState.start).addScaledVector(meteorState.dir, u);
+    meteorMat.opacity = Math.sin(Math.min(u, 1) * Math.PI) * 0.92;
+    if (u >= 1) {
+      meteorState.active = false;
+      meteorMat.opacity = 0;
+      meteorState.next = 9.0 + Math.random() * 11.0;
+    }
+  }
+
+  // 13) 远谷夜雾缓慢流动
+  for (const vm of valleyMists) {
+    vm.angle += vm.speed * dt;
+    vm.sprite.position.set(
+      Math.cos(vm.angle) * vm.dist,
+      vm.baseY + Math.sin(elapsed * 0.4 + vm.angle) * 0.45,
+      Math.sin(vm.angle) * vm.dist
+    );
+  }
+
+  // 14) 极偶发事件：远景山腰林间小狐狸剪影小跑而过，留下一行小脚印后消失
+  if (!foxState.active) {
+    foxState.nextTrigger -= dt;
+    if (foxState.nextTrigger <= 0) {
+      foxState.active = true;
+      foxState.t = 0;
+      foxState.printTimer = 0;
+      foxGroup.visible = true;
+    }
+  } else {
+    foxState.t += dt;
+    const u = foxState.t / foxState.dur;
+    const pos = new THREE.Vector3().lerpVectors(foxState.start, foxState.end, Math.min(u, 1));
+    pos.z += Math.sin(u * Math.PI * 2.0) * 0.55;
+    foxGroup.position.set(pos.x, pos.y + Math.abs(Math.sin(elapsed * 11.5)) * 0.08, pos.z);
+    foxGroup.rotation.y = Math.atan2(foxState.end.x - foxState.start.x, foxState.end.z - foxState.start.z);
+    // 四肢轻快小跑摆动
+    foxLegs[0].rotation.x = Math.sin(elapsed * 14) * 0.55;
+    foxLegs[1].rotation.x = -Math.sin(elapsed * 14) * 0.55;
+    foxLegs[2].rotation.x = -Math.sin(elapsed * 14) * 0.55;
+    foxLegs[3].rotation.x = Math.sin(elapsed * 14) * 0.55;
+    foxTail.rotation.y = Math.sin(elapsed * 10) * 0.25;
+    // 在雪地上留下一行小脚印
+    foxState.printTimer += dt;
+    if (foxState.printTimer >= 0.36) {
+      foxState.printTimer = 0;
+      const fp = foxPrints[foxState.nextPrintIdx % foxPrints.length];
+      foxState.nextPrintIdx++;
+      fp.mesh.position.set(pos.x, 5.43, pos.z + ((foxState.nextPrintIdx % 2) - 0.5) * 0.12);
+      fp.age = 0;
+    }
+    if (u >= 1) {
+      foxState.active = false;
+      foxGroup.visible = false;
+      foxState.nextTrigger = 18.0 + Math.random() * 14.0;
+    }
+  }
+  // 小狐狸脚印留存一段时间后随降雪渐渐淡去
+  for (const fp of foxPrints) {
+    if (fp.age < 12.0) {
+      fp.age += dt;
+      fp.mesh.material.opacity = Math.max(0, 0.72 * (1 - fp.age / 12.0));
+    } else {
+      fp.mesh.material.opacity = 0;
+    }
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+animate();
+
+// ==================== 响应式 ====================
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>

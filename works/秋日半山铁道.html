@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#e8afa1">
+<title>山吹 · 黄昏归途</title>
+<style>
+  *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden}
+  body{background:linear-gradient(180deg,#9799bb 0%,#cbb0c3 36%,#efb9a5 67%,#f6d2a5 100%)}
+  canvas{display:block;width:100%;height:100%;outline:none;touch-action:none;cursor:grab}
+  canvas:active{cursor:grabbing}::selection{background:transparent}
+</style>
+</head>
+<body>
+<script type="module">
+// 山吹旧书店。全部模型、文字、纹理及动画均在此文件中程序化生成，无图片资源。
+const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js')
+  .catch(()=>import('https://unpkg.com/three@0.170.0/build/three.module.js'));
+const {
+  Scene,Color,FogExp2,PerspectiveCamera,WebGLRenderer,Vector2,Vector3,Quaternion,
+  Group,Mesh,InstancedMesh,Object3D,BoxGeometry,CylinderGeometry,ConeGeometry,
+  SphereGeometry,IcosahedronGeometry,PlaneGeometry,TorusGeometry,TubeGeometry,
+  BufferGeometry,Float32BufferAttribute,CanvasTexture,DataTexture,ShaderMaterial,
+  MeshToonMaterial,MeshBasicMaterial,MeshStandardMaterial,MeshLambertMaterial,
+  LineBasicMaterial,Line,LineSegments,EdgesGeometry,Shape,ShapeGeometry,
+  CatmullRomCurve3,AmbientLight,HemisphereLight,DirectionalLight,PointLight,
+  DoubleSide,BackSide,NearestFilter,RGBAFormat,SRGBColorSpace,PCFSoftShadowMap,
+  ACESFilmicToneMapping,AdditiveBlending,DynamicDrawUsage,Matrix4
+}=THREE;
+const scene=new Scene();
+scene.fog=new FogExp2('#dbb0ae',0.012);
+const renderer=new WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=PCFSoftShadowMap;
+renderer.outputColorSpace=SRGBColorSpace;renderer.toneMapping=ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.2;
+renderer.setClearColor(0x000000,0);
+renderer.domElement.setAttribute('aria-label','秋日黄昏的半山铁道与山吹旧书店三维微缩景观，可拖拽旋转、滚轮缩放，方向键旋转，正负号缩放');
+renderer.domElement.tabIndex=0;document.body.appendChild(renderer.domElement);
+const camera=new PerspectiveCamera(36,innerWidth/innerHeight,0.1,160);
+const world=new Group();scene.add(world);
+let seed=92317;
+function rand(a=0,b=1){seed=(seed*1664525+1013904223)>>>0;return a+(b-a)*seed/4294967296;}
+function choose(a){return a[Math.floor(rand(0,a.length))];}
+const C={wood:'#705044',darkWood:'#493c40',woodLight:'#bc8861',edge:'#403846',
+  indigo:'#3e4864',roof:'#41526a',roofLight:'#617083',stone:'#938c88',
+  moss:'#677b58',gold:'#ffcd83',yellow:'#e9bd6b',red:'#c95643',cream:'#f0d8ac',
+  paper:'#edd9b2',pink:'#e59a87',water:'#688c92'};
+const gradient=new DataTexture(new Uint8Array([70,70,70,255,132,132,132,255,199,199,199,255,255,255,255,255]),4,1,RGBAFormat);
+gradient.minFilter=NearestFilter;gradient.magFilter=NearestFilter;gradient.needsUpdate=true;
+const mats=new Map();
+function toon(color){if(!mats.has(color))mats.set(color,new MeshToonMaterial({color,gradientMap:gradient}));return mats.get(color);}
+function basic(color,opacity=1){return new MeshBasicMaterial({color,transparent:opacity<1,opacity,depthWrite:opacity>=1});}
+const edgeMat=new LineBasicMaterial({color:C.edge,transparent:true,opacity:0.31});
+const glowMat=basic('#ffe3a1');
+const geometries={box:new BoxGeometry(1,1,1),cyl:new CylinderGeometry(1,1,1,12),sphere:new SphereGeometry(1,10,7),ico:new IcosahedronGeometry(1,0)};
+function mesh(geo,mat,x=0,y=0,z=0,parent=world){const m=new Mesh(geo,typeof mat==='string'?toon(mat):mat);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;}
+function box(w,h,d,x,y,z,color,parent=world,outline=false){const m=mesh(geometries.box,color,x,y,z,parent);m.scale.set(w,h,d);if(outline){const e=new LineSegments(new EdgesGeometry(geometries.box),edgeMat);m.add(e);}return m;}
+function cyl(rt,rb,h,x,y,z,color,parent=world,n=12){return mesh(new CylinderGeometry(rt,rb,h,n),color,x,y,z,parent);}
+function ball(r,x,y,z,color,parent=world){const m=mesh(geometries.sphere,color,x,y,z,parent);m.scale.setScalar(r);return m;}
+function rock(s,x,y,z,color,parent=world){const m=mesh(geometries.ico,color,x,y,z,parent);m.scale.set(s*rand(.8,1.2),s*rand(.55,1),s*rand(.7,1.25));m.rotation.set(rand(0,2),rand(0,4),rand(0,2));return m;}
+function rod(a,b,r,color,parent=world,n=8){const va=new Vector3(...a),vb=new Vector3(...b);const m=cyl(r,r,va.distanceTo(vb),...va.clone().add(vb).multiplyScalar(.5).toArray(),color,parent,n);m.quaternion.setFromUnitVectors(new Vector3(0,1,0),vb.sub(va).normalize());return m;}
+function line(points,color='#514955',parent=world){const g=new BufferGeometry().setFromPoints(points.map(p=>new Vector3(...p)));const m=new Line(g,new LineBasicMaterial({color}));parent.add(m);return m;}
+function curve(points,r,color,parent=world){const c=new CatmullRomCurve3(points.map(p=>new Vector3(...p)));return mesh(new TubeGeometry(c,32,r,6,false),color,0,0,0,parent);}
+function group(x=0,y=0,z=0,parent=world){const g=new Group();g.position.set(x,y,z);parent.add(g);return g;}
+function textureCanvas(w,h,draw){const c=document.createElement('canvas');c.width=w;c.height=h;draw(c.getContext('2d'),w,h);const t=new CanvasTexture(c);t.colorSpace=SRGBColorSpace;t.anisotropy=4;return t;}
+function placard(text,w,h,x,y,z,opt={},parent=world){
+  const t=textureCanvas(opt.vertical?160:768,opt.vertical?768:256,(ctx,W,H)=>{
+    ctx.fillStyle=opt.bg||'#ecdfbc';ctx.fillRect(0,0,W,H);
+    if(opt.border!==false){ctx.strokeStyle=opt.ink||'#4c4b4e';ctx.lineWidth=5;ctx.strokeRect(10,10,W-20,H-20);}
+    ctx.fillStyle=opt.ink||'#3f4149';ctx.textAlign='center';ctx.textBaseline='middle';
+    if(opt.vertical){ctx.font=`500 ${Math.min(110,(H-60)/text.length*.85)}px "Yu Mincho","Noto Serif CJK JP",serif`;[...text].forEach((c,i)=>ctx.fillText(c,W/2,40+(i+.5)*(H-80)/text.length));}
+    else{ctx.font=`${opt.bold?'bold':'500'} ${opt.fontSize||100}px "Yu Mincho","Microsoft YaHei",serif`;ctx.fillText(text,W/2,H/2,W-50);}
+    for(let i=0;i<45;i++){ctx.fillStyle=`rgba(89,61,44,${rand(.015,.055)})`;ctx.fillRect(rand(0,W),rand(0,H),rand(1,20),rand(1,3));}
+  });
+  const mat=new MeshBasicMaterial({map:t,side:DoubleSide,color:opt.tint||'#ffffff'});
+  const m=mesh(new PlaneGeometry(w,h),mat,x,y,z,parent);m.castShadow=false;if(opt.rotation)m.rotation.y=opt.rotation;return m;
+}
+function patch(w,d,x,y,z,col,parent=world){const p=mesh(new PlaneGeometry(w,d),basic(col,.65),x,y,z,parent);p.rotation.x=-Math.PI/2;p.receiveShadow=true;p.castShadow=false;return p;}
+function batches(geo,colors,count,build,parent=world){const m=new InstancedMesh(geo,Array.isArray(colors)?toon(colors[0]):colors,count);const dummy=new Object3D();for(let i=0;i<count;i++){dummy.position.set(0,0,0);dummy.rotation.set(0,0,0);dummy.scale.set(1,1,1);build(dummy,i);dummy.updateMatrix();m.setMatrixAt(i,dummy.matrix);if(Array.isArray(colors))m.setColorAt(i,new Color(choose(colors)));}m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;}
+
+// 低角度琥珀夕照与群青环境光。
+scene.add(new HemisphereLight('#f8d5b0','#565c8b',2.3));
+scene.add(new AmbientLight('#c3b1d2',.6));
+const sun=new DirectionalLight('#ffd29b',4.1);sun.position.set(-11,13,9);sun.target.position.set(0,0,0);
+sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-12,right:12,top:12,bottom:-12,near:1,far:45});
+sun.shadow.bias=-.0005;sun.shadow.normalBias=.035;sun.shadow.radius=3;scene.add(sun,sun.target);
+const rim=new DirectionalLight('#8f9be0',1.2);rim.position.set(9,7,-10);scene.add(rim);
+
+// 方形地质切片。地层的连续性与切面细节也能从背面观看。
+box(14,.24,14,0,-1.66,0,'#514453',world,true);
+// 前右角留下真实河槽，不用透明水面覆盖实心地形。
+function cutSlab(y,h,color){
+ box(11.90,h,13.96,-1.03,y,0,color,world,true);
+ box(2.06,h,11.22,5.95,y,-1.37,color,world,true);
+}
+cutSlab(-.86,1.4,'#665054');
+cutSlab(-.10,.16,'#9b8270');
+for(let k=0;k<5;k++){
+  const y=-1.45+k*.25;
+  const pts=[];for(let j=0;j<35;j++)pts.push([-6.97+j*.41,y+rand(-.065,.065),7.015]);
+  curve(pts,.015,choose(['#ac8169','#8b6960','#4e454e']));
+}
+batches(geometries.ico,['#58444b','#79594f','#936b58','#504550','#a4785c'],185,(o,i)=>{
+  const side=i%3;o.position.set(side===0?rand(-6.85,6.85):side===1?-7.02:7.02,rand(-1.5,-.24),side===0?7.02:rand(-6.8,6.8));
+  o.scale.set(rand(.13,.38),rand(.06,.16),rand(.05,.17));if(side)o.scale.set(rand(.06,.12),rand(.08,.18),rand(.2,.4));o.rotation.z=rand(-.4,.4);
+});
+// 两级站前地形与深色山体。
+box(13.8,.48,7.8,0,.21,-2.99,'#807264');
+box(6.8,.78,5.15,-3.5,.8,-4.3,'#726956');
+box(6.15,1.03,5.2,3.8,1,-4.25,'#7d735f');
+box(5.9,.10,5.1,3.78,1.55,-4.24,'#8f9277');
+box(6.75,.12,4.95,-3.48,1.24,-4.4,'#8b8d6b');
+// 可读的砌石挡土墙。
+function wall(x0,x1,z,y0,rows){for(let row=0;row<rows;row++){for(let x=x0-(row%2)*.28;x<x1;x+=.59){const w=Math.min(.54,x1-x);if(w<.1)continue;box(w,.235,.30,x+w/2,y0+row*.26,z,choose(['#83817f','#99918a','#777b7d','#aaa08c']),world,true);if(rand()<.34)box(w*.8,.025,.315,x+w/2,y0+row*.26+.115,z,'#68765b');}}}
+wall(-6.9,-.38,-1.38,.23,4);wall(1.10,6.87,-1.62,.28,5);
+wall(-6.92,-4.55,6.95,-1.39,5);
+for(let i=0;i<55;i++){const x=rand(-6.9,6.9),z=rand(-6.7,-2.3);rock(rand(.10,.25),x,1.35,z,choose(['#82816d','#73775a','#999078']));}
+// 前侧裸露的排水暗管，内壁与锈蚀箍带。
+const pipe=cyl(.23,.23,.36,-3.6,-.72,7.03,'#684846',world,20);pipe.rotation.x=Math.PI/2;
+const mouth=mesh(new TorusGeometry(.23,.045,7,22),'#a27253',-3.6,-.72,7.24);mouth.rotation.x=0;
+const pipeDark=mesh(new PlaneGeometry(.36,.36),basic('#272d3a'),-3.6,-.72,7.235);pipeDark.castShadow=false;
+for(let i=0;i<8;i++)box(.018,rand(.04,.13),.012,-3.6+rand(-.16,.16),-.88-rand(0,.2),7.24,'#b07950');
+// 被切开的枫树根系。
+for(let i=0;i<7;i++)curve([[-5.8+i*.12,-.08,6.99],[-5.5+rand(-.6,.6),-.48,7.035],[-5.7+rand(-.85,.85),-.93,7.04],[-5.5+rand(-1,1),-1.43,7.04]],rand(.018,.043),'#51413e');
+
+// 前景单线铁道：微弯轨道、锈侧与被夕照擦亮的轨面。
+function trackZ(x){return 4.38+.18*Math.sin(x*.25)+.008*x*x;}
+box(13.8,.12,2.12,0,.035,4.57,'#756e6e');
+batches(geometries.ico,['#74717b','#a29a93','#666778','#c1ac95','#8b8588'],850,o=>{const x=rand(-6.85,6.85);o.position.set(x,rand(.07,.15),trackZ(x)+rand(-1.07,1.07));o.scale.set(rand(.035,.105),rand(.025,.07),rand(.035,.1));o.rotation.set(rand(0,3),rand(0,3),rand(0,3));});
+for(let x=-6.7;x<6.9;x+=.35){const z=trackZ(x);const sleeper=box(.17,.12,1.75,x,.18,z,choose(['#735749','#5c4945','#896552']),world,true);sleeper.rotation.y=-Math.atan(.045*Math.cos(x*.25)+.016*x);for(const d of [-.52,.52]){box(.22,.035,.19,x,.255,z+d,'#655951');for(const a of [-.065,.065])cyl(.026,.026,.035,x+a,.285,z+d,'#c29361',world,6);}}
+for(const d of [-.52,.52]){
+  const points=[];for(let i=0;i<=80;i++){const x=-6.92+i*13.84/80;points.push([x,.32,trackZ(x)+d]);}
+  curve(points,.039,'#9b7158');curve(points.map(p=>[p[0],p[1]+.035,p[2]]),.024,'#d3beb0');
+}
+// 月台、风化边砖及褪色安全线。
+box(13.65,.43,1.55,0,.36,2.7,'#8c8480',world,true);
+box(13.72,.10,1.6,0,.61,2.7,'#b0a08c',world,true);
+for(let x=-6.7;x<6.8;x+=.43)box(.40,.15,.22,x,.55,3.48,choose(['#b8aa93','#c0af93','#a99c88']));
+for(let x=-6.65;x<6.8;x+=.48)box(rand(.30,.43),.013,.075,x,.671,3.2,choose(['#dfba6a','#bd9b61','#eed092']));
+for(let i=0;i<32;i++){const x=rand(-6.7,6.7);line([[x,.675,2.16],[x+rand(-.2,.2),.677,2.7],[x+.2,.678,3.03]],'#877e78');}
+// 几处打ち水，用利落的彩色碎片概括湿润反光。
+const wetColors=['#c7ac99','#d2a47d','#88929b','#aa8a81','#dfb484'];
+for(let i=0;i<31;i++){const x=rand(-4.4,5.9),z=rand(.0,2.9);const m=mesh(new CircleGeometrySafe(rand(.08,.24),5),basic(choose(wetColors),.48),x,z>2?.684:.49,z);m.rotation.x=-Math.PI/2;m.scale.y=rand(.3,.7);m.castShadow=false;}
+function CircleGeometrySafe(r,n){return new THREE.CircleGeometry(r,n);}
+
+// 候车雨棚与一间通透的小候车室。
+const shelter=group(-3,.68,2.12);
+for(const x of [-2.35,.0,2.35])for(const z of [-.50,.65]){
+  box(.095,2.08,.095,x,1.04,z,'#68564a',shelter,true);
+  rod([x,.04,z],[x,.18,z],.095,'#918e81',shelter);
+  rod([x,1.65,z],[x+.30,1.99,z],.037,C.woodLight,shelter);
+}
+box(5.25,.12,1.7,0,2.13,.04,C.wood,shelter,true);
+const roof1=box(5.65,.11,1.12,0,2.34,-.33,C.roof,shelter,true);roof1.rotation.x=.20;
+const roof2=box(5.65,.11,1.12,0,2.34,.71,C.roof,shelter,true);roof2.rotation.x=-.20;
+rod([-2.86,2.47,.18],[2.86,2.47,.18],.065,'#768394',shelter);
+for(let x=-2.72;x<2.9;x+=.24){rod([x,2.27,-.88],[x,2.48,.17],.014,'#7c8996',shelter);rod([x,2.48,.17],[x,2.27,1.24],.014,'#7c8996',shelter);}
+curve([[-2.87,2.23,1.18],[-2.87,1.45,1.18],[-2.87,.12,1.18]],.034,'#6d635b',shelter);
+box(1.5,1.5,.09,-1.62,.8,-.5,'#a98a6a',shelter,true);
+box(1.52,.13,.12,-1.62,1.6,-.5,C.darkWood,shelter);
+for(const x of [-2.32,-1.62,-.92])box(.05,.95,.04,x,1.03,-.425,C.wood,shelter);
+box(1.40,.045,.04,-1.62,1.1,-.42,C.wood,shelter);
+for(const x of [-1.96,-1.27])box(.62,.80,.018,x,1.07,-.46,new MeshBasicMaterial({color:'#a9bbb3',transparent:true,opacity:.17,depthWrite:false}),shelter);
+placard('時 刻 表',.61,.18,-1.6,1.40,-.397,{fontSize:72},shelter);
+const schedule=textureCanvas(256,350,(ctx,w,h)=>{ctx.fillStyle='#e0cc9e';ctx.fillRect(0,0,w,h);ctx.fillStyle='#5f5c57';ctx.font='17px serif';for(let row=0;row<11;row++){ctx.fillText(`${6+row}: ${row%2?'08  39':'15  52'}`,18,30+row*28);ctx.fillRect(15,37+row*28,w-30,1);}});
+mesh(new PlaneGeometry(.48,.60),new MeshBasicMaterial({map:schedule}),-1.6,.97,-.393,shelter);
+placard('山吹',.23,1.0,.055,1.26,.722,{vertical:true},shelter);
+placard('やまぶき',.80,.16,1.55,1.90,.68,{bg:'#e8dfc3',fontSize:72},shelter);
+// 钟面。
+const clockG=group(-.75,1.85,.72,shelter);
+const clockRim=cyl(.235,.235,.07,0,0,0,'#534b4a',clockG,32);clockRim.rotation.x=Math.PI/2;
+const clockTex=textureCanvas(256,256,(ctx,w,h)=>{
+  ctx.fillStyle='#eadbbc';ctx.beginPath();ctx.arc(128,128,120,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#4a4951';ctx.lineWidth=4;for(let i=0;i<12;i++){const a=i*Math.PI/6;ctx.beginPath();ctx.moveTo(128+96*Math.sin(a),128-96*Math.cos(a));ctx.lineTo(128+109*Math.sin(a),128-109*Math.cos(a));ctx.stroke();}
+  ctx.lineCap='round';ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(128,128);ctx.lineTo(80,108);ctx.stroke();ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(128,128);ctx.lineTo(155,46);ctx.stroke();
+});
+mesh(new THREE.CircleGeometry(.209,32),new MeshBasicMaterial({map:clockTex}),0,0,.041,clockG);
+function bench(x,z,parent){const g=group(x,0,z,parent);for(let i=0;i<4;i++)box(1.72,.055,.11,0,.45,-.17+i*.12,i%2?'#91aa93':'#a4b29a',g,true);for(let i=0;i<3;i++)box(1.72,.12,.045,0,.66+i*.13,-.20,choose(['#8fa590','#a3b49a']),g,true);for(const a of [-.65,.65]){rod([a,.03,-.16],[a,.51,-.16],.037,'#4e5956',g);rod([a,.03,.20],[a,.51,.20],.037,'#4e5956',g);rod([a,.43,-.19],[a,1.02,-.22],.025,'#4e5956',g);}for(let i=0;i<11;i++)box(rand(.02,.07),.007,.025,rand(-.8,.8),.482,rand(-.17,.18),'#d8c6a2',g);return g;}
+const bench1=bench(.9,.2,shelter),bench2=bench(-1.65,.18,shelter);
+box(.35,.30,.18,-.32,.63,.05,'#384764',bench1,true);
+curve([[-.44,.76,.05],[-.44,.87,.05],[-.2,.87,.05],[-.2,.76,.05]],.013,'#75694e',bench1);
+box(.20,.10,.016,-.32,.59,.15,'#61728a',bench1);
+const bookPivot=group(.38,.506,.02,bench1);
+box(.37,.025,.25,0,0,0,'#945b45',bookPivot);
+for(const s of [-1,1]){const p=box(.175,.014,.23,s*.091,.02,0,C.paper,bookPivot);p.rotation.z=s*.08;for(let j=0;j<5;j++)box(.12,.002,.006,s*.09,.031,-.08+j*.035,'#b6a48e',bookPivot);}
+const page=mesh(new PlaneGeometry(.174,.23,6,4),new MeshLambertMaterial({color:'#f3e1bc',side:DoubleSide}),.008,.039,0,bookPivot);page.rotation.x=-Math.PI/2;
+const pageBase=page.geometry.attributes.position.array.slice();
+// 小站站名与限速牌。
+for(const x of [4.82,6.35])box(.055,1.68,.055,x,1.45,2.62,'#d7d0ae');
+box(1.76,.64,.09,5.58,2.08,2.62,C.cream,world,true);
+placard('山 吹',1.58,.32,5.58,2.18,2.675,{fontSize:106,border:false});
+placard('Y A M A B U K I',1.43,.12,5.58,1.99,2.68,{fontSize:65,border:false,ink:'#6c7760'});
+box(1.65,.045,.01,5.58,1.89,2.68,'#789275');
+rod([5.85,.1,5.95],[5.85,1.5,5.95],.035,'#897f6c');
+placard('25',.43,.47,5.85,1.48,5.96,{bg:'#d6d2b7',fontSize:151,bold:true});
+// 带遮阳罩的绿 / 黄双灯式信号机。
+const signal=group(-5.95,.12,4.92);
+box(.36,.16,.36,0,.08,0,'#85847e',signal,true);
+cyl(.065,.08,2.1,0,1.1,0,'#62666a',signal);
+box(.37,.92,.21,0,2.10,.025,'#303b44',signal,true);
+const signalLights=[];
+for(let i=0;i<2;i++){
+ const y=2.34-i*.45;
+ const ring=mesh(new TorusGeometry(.116,.027,7,18),'#69726a',0,y,.15,signal);
+ const l=mesh(new THREE.CircleGeometry(.093,20),basic(i?'#ffd171':'#95edb2'),0,y,.16,signal);signalLights.push(l);
+ const hood=mesh(new CylinderGeometry(.16,.16,.22,16,1,true,0,Math.PI),toon('#37444b'),0,y+.02,.18,signal);hood.rotation.x=Math.PI/2;hood.rotation.z=Math.PI;
+}
+for(let y=.35;y<1.95;y+=.25){rod([-.16,y,-.12],[.16,y,-.12],.018,'#8e8c7b',signal);}
+rod([-.16,.3,-.12],[-.16,2,-.12],.018,'#797e74',signal);rod([.16,.3,-.12],[.16,2,-.12],.018,'#797e74',signal);
+
+// 从低月台蜿蜒通往书店的石板小街与上山石阶。
+for(let row=0;row<7;row++)for(let col=0;col<19;col++){
+ const x=-5.52+col*.64+(row%2)*.25,z=-.68+row*.37;
+ if(x>6.5)continue;
+ box(rand(.55,.60),.065,.32,x,.474+rand(-.008,.008),z,choose(['#b2a18d','#b9a691','#a39b91','#c1ad93']),world,true);
+}
+for(let i=0;i<7;i++){const z=1.68-i*.41;box(1.42,.12+i*.055,.43,.0,.49+i*.062,z,'#a79c8b',world,true);box(1.43,.028,.08,0,.566+i*.09,z+.17,'#ccbaa0');}
+// 左侧上山阶梯，通向林间鸟居。
+for(let i=0;i<12;i++){
+ const z=-1.34-i*.40,y=.61+i*.106;
+ box(1.16,.16,.44,-1.35,y,z,choose(['#a49e8d','#959589','#b0a38b']),world,true);
+ if(i%3===0)box(.20,.018,.27,-1.76,y+.087,z,'#76855a');
+}
+for(const x of [-.82,.82]){
+ for(let i=0;i<4;i++)box(.04,.68,.04,x,.90+i*.11,1.5-i*.65,'#6b615b');
+ rod([x,1.23,1.55],[x,1.57,-.60],.024,'#6b615b');
+ rod([x,.94,1.55],[x,1.28,-.60],.015,'#827066');
+}
+for(let i=0;i<9;i++)rod([1.0+i*.56,.58,-.85],[1.0+i*.56,1.16,-.85],.022,'#77695a');
+rod([.98,1.15,-.85],[5.5,1.15,-.85],.026,'#8d7960');
+
+// 两层旧书店。正面敞开，右立面保留大格窗，室内真实搭建。
+const shop=group(3.38,.54,-2.54);
+box(4.45,.25,3.64,0,.12,0,'#8d8175',shop,true);
+box(4.25,.12,3.48,0,.29,0,C.woodLight,shop,true);
+for(let x=-2.0;x<2.15;x+=.18)box(.012,.009,3.37,x,.354,0,'#8b624c',shop);
+box(4.24,2.34,.12,0,1.54,-1.69,'#b9936e',shop,true);
+box(.12,2.34,3.40,-2.06,1.54,0,'#a88768',shop,true);
+// 右侧下半墙与大片有格子的透明玻璃窗。
+box(.12,.62,3.40,2.06,.64,0,'#a38466',shop,true);
+box(.12,.22,3.40,2.06,2.55,0,C.wood,shop);
+for(const z of [-1.68,-.84,0,.84,1.68])box(.14,1.44,.075,2.07,1.67,z,C.darkWood,shop,true);
+for(const y of [1.03,1.68,2.34])box(.14,.06,3.38,2.07,y,0,C.darkWood,shop);
+const glassMat=new MeshBasicMaterial({color:'#b9c8b4',transparent:true,opacity:.095,depthWrite:false,side:DoubleSide});
+box(.018,1.23,3.28,2.075,1.68,0,glassMat,shop);
+for(const x of [-2.06,-.92,.93,2.06])box(.12,2.50,.12,x,1.56,1.69,C.darkWood,shop,true);
+box(4.35,.17,.15,0,2.77,1.70,C.darkWood,shop,true);
+box(.98,.66,.09,-1.53,.68,1.69,'#b69270',shop,true);
+// 退到两旁的木拉门。
+for(const x of [-1.60,1.58]){
+ box(.80,1.79,.045,x,1.57,1.73,'#997551',shop,true);
+ box(.68,1.27,.018,x,1.78,1.76,glassMat,shop);
+ for(let k=0;k<4;k++)box(.024,1.52,.03,x-.30+k*.20,1.66,1.79,C.darkWood,shop);
+ for(const y of [.99,1.53,2.09,2.41])box(.72,.031,.04,x,y,1.79,C.darkWood,shop);
+}
+// 楼板、阁楼墙、木构骨架。
+box(4.39,.18,3.60,0,2.88,0,'#77533f',shop,true);
+box(4.24,1.85,.11,0,3.88,-1.70,'#cfb28a',shop,true);
+box(.11,1.85,3.40,-2.08,3.88,0,'#b89a78',shop,true);
+box(.10,.55,3.40,2.08,3.20,0,'#c3a47e',shop,true);
+box(.10,.26,3.40,2.08,4.64,0,'#c3a47e',shop);
+for(const z of [-1.68,-.55,.56,1.68])box(.14,1.78,.11,2.09,3.92,z,C.wood,shop,true);
+box(.018,1.11,3.22,2.09,3.95,0,glassMat,shop);
+box(4.24,.62,.10,0,3.25,1.70,'#b49470',shop,true);
+box(4.24,.26,.11,0,4.66,1.70,'#cdb38a',shop);
+for(const x of [-2.05,-.52,.98,2.06])box(.12,1.7,.13,x,3.91,1.72,C.darkWood,shop,true);
+for(const y of [3.50,4.44])box(4.21,.085,.12,0,y,1.73,C.wood,shop);
+// 左窗关闭、右窗半开，保证可看见榻榻米与吉他。
+for(const x of [-1.73,-1.20,-.67])box(.036,.89,.055,x,3.97,1.76,C.wood,shop);
+box(1.43,.90,.018,-1.30,3.97,1.75,glassMat,shop);
+for(const x of [.99,1.25,1.51,1.77,2.03])box(.028,.89,.06,x,3.97,1.79,C.wood,shop);
+box(1.03,.90,.018,1.50,3.97,1.77,glassMat,shop);
+for(const x of [-2.1,2.1])for(const z of [-1.7,1.7])box(.15,4.61,.15,x,2.5,z,C.darkWood,shop,true);
+for(const y of [.62,.87,1.12,1.37,1.62,1.87,2.12,2.37])box(.014,.022,3.32,-2.126,y,0,'#7e624e',shop);
+// 正面暖黄灯箱与深蓝暖帘。
+box(3.34,.56,.21,0,2.66,1.86,'#574b45',shop,true);
+box(3.18,.41,.03,0,2.66,1.985,basic('#f9d48c'),shop);
+placard('山 吹 旧 書 店',3.0,.34,0,2.66,2.008,{bg:'#f2cf8c',ink:'#514839',fontSize:104,border:false},shop);
+placard('古書 ・ 喫茶',.85,.16,-1.48,1.15,1.81,{bg:'#c8b088',fontSize:80},shop);
+const noren=[];
+for(let i=0;i<4;i++){
+ const g=group(-.70+i*.47,2.34,1.91,shop);
+ const geom=new PlaneGeometry(.45,.63,5,7);
+ const m=mesh(geom,new MeshToonMaterial({color:'#35465e',gradientMap:gradient,side:DoubleSide}),0,-.315,0,g);m.castShadow=true;
+ const emblem=placard(i===1?'山':i===2?'吹':'',.19,.21,0,-.30,.008,{bg:'#35465e',ink:'#d9cbb0',border:false,fontSize:140},g);
+ noren.push({g,m,base:geom.attributes.position.array.slice(),phase:i*.7,emblem});
+}
+rod([-1.02,2.37,1.91],[1.03,2.37,1.91],.024,'#b89c70',shop);
+// 瓦屋顶：坡面、端部木板、细密瓦垄和瓦当。
+const roofSlope=.43,roofHalf=2.1;
+for(const side of [-1,1]){
+ const m=box(4.92,.13,2.46,0,5.16,side*1.09,side===1?'#46536a':'#5c6578',shop,true);m.rotation.x=side*.43;
+ for(let x=-2.43;x<2.48;x+=.20){rod([x,5.64,0],[x,4.66,side*2.19],.035,choose(['#626f80','#76808a','#4e5d74']),shop,6);}
+ for(let k=1;k<=7;k++){const z=side*k*.305;rod([-2.43,5.64-k*.135,z],[2.43,5.64-k*.135,z],.018,'#3d485d',shop);}
+ rod([-2.48,4.66,side*2.2],[2.48,4.66,side*2.2],.055,'#343f54',shop);
+}
+rod([-2.56,5.67,0],[2.56,5.67,0],.09,'#7a7f87',shop,10);
+for(const x of [-2.47,2.47]){rod([x,4.65,-2.2],[x,5.67,0],.06,C.darkWood,shop);rod([x,5.67,0],[x,4.65,2.2],.06,C.darkWood,shop);}
+// 阁楼小阳台与随风晾晒的白衬衫。
+box(1.85,.10,.67,.85,3.03,2.04,'#977456',shop,true);
+for(let i=0;i<9;i++)box(.045,.58,.045,.0+i*.207,3.36,2.35,C.wood,shop);
+box(1.83,.07,.08,.83,3.66,2.35,C.darkWood,shop);
+rod([-.05,4.40,2.02],[1.90,4.39,2.02],.014,'#675b55',shop);
+const shirtPivot=group(.48,4.37,2.03,shop);
+line([[0,0,0],[-.22,-.11,0],[.22,-.11,0],[0,0,0]],'#887d70',shirtPivot);
+const shirtShape=new Shape();shirtShape.moveTo(-.14,-.09);shirtShape.lineTo(-.35,-.22);shirtShape.lineTo(-.28,-.38);shirtShape.lineTo(-.16,-.32);shirtShape.lineTo(-.15,-.79);shirtShape.lineTo(.16,-.79);shirtShape.lineTo(.16,-.32);shirtShape.lineTo(.28,-.38);shirtShape.lineTo(.35,-.22);shirtShape.lineTo(.14,-.09);shirtShape.lineTo(.06,-.16);shirtShape.lineTo(-.06,-.16);shirtShape.closePath();
+const shirt=mesh(new ShapeGeometry(shirtShape),new MeshToonMaterial({color:'#e8e3cb',side:DoubleSide,gradientMap:gradient}),0,0,0,shirtPivot);
+line([[0,-.18,.006],[0,-.75,.006]],'#b6b9b1',shirtPivot);
+for(let j=0;j<4;j++)ball(.008,.035,-.28-j*.11,.012,'#a1a69e',shirtPivot);
+// 屋檐下的吊灯。
+const flicker=[];
+function lamp(x,y,z,parent=world,scale=1){const g=group(x,y,z,parent);cyl(.018,.018,.32*scale,0,.12,0,'#62584c',g);mesh(new ConeGeometry(.22*scale,.17*scale,16,1,true),toon('#59615c'),0,-.08,0,g);const bulb=ball(.078*scale,0,-.15,0,glowMat,g);const light=new PointLight('#ffd292',1.8*scale,3.5*scale,2);light.position.set(0,-.22,0);g.add(light);flicker.push({light,base:light.intensity,phase:rand(0,6)});return g;}
+lamp(-.25,2.48,.53,shop,.7);lamp(1.30,4.45,-.10,shop,.6);lamp(.4,1.98,.13,shelter,.55);
+
+// 书架上的每本书都有独立书脊与适量书脊纹路，室内不是贴图。
+const bookColors=['#aa674f','#d0b27e','#5f7c77','#6b748b','#d29b70','#976d75','#bca88c','#687167','#cbbdad','#526778'];
+function bookshelf(x,y,z,w,h,d,parent=shop,angle=0){
+ const g=group(x,y,z,parent);g.rotation.y=angle;
+ box(w,h,.055,0,h/2,-d/2,C.darkWood,g,true);
+ for(const s of [-1,1])box(.065,h,d,s*w/2,h/2,0,'#654b3e',g,true);
+ const shelves=Math.floor(h/.43);
+ for(let row=0;row<=shelves;row++)box(w+.06,.055,d+.045,0,.05+row*(h-.1)/shelves,0,'#886342',g,true);
+ for(let row=0;row<shelves;row++){
+   let xx=-w/2+.08,yy=.08+row*(h-.1)/shelves;
+   while(xx<w/2-.10){const bw=rand(.045,.095),bh=rand(.22,.34);const b=box(bw,bh,d*.70,xx+bw/2,yy+bh/2,.025,choose(bookColors),g);b.rotation.z=rand(-.06,.06);
+    if(rand()<.42)box(bw*.74,.012,.006,xx+bw/2,yy+bh*.74,d*.385,'#e3d0a3',g);
+    xx+=bw+.014;
+   }
+ }
+ return g;
+}
+bookshelf(-.92,.37,-1.45,1.85,2.19,.37);
+bookshelf(1.14,.37,-1.45,1.80,2.19,.37);
+bookshelf(-1.79,.37,-.21,2.18,2.18,.35,shop,Math.PI/2);
+// 外摆矮书架、倾斜书摊。
+bookshelf(-1.60,.37,2.00,.93,1.23,.38);
+bookshelf(2.45,.04,.77,1.0,1.2,.40,shop,-Math.PI/2);
+const bookstall=group(-1.62,.36,2.52,shop);bookstall.rotation.x=-.25;
+box(.95,.065,.50,0,.20,0,'#8e684b',bookstall,true);
+for(let i=0;i<5;i++){box(.147,.025,.34,-.36+i*.18,.25,0,choose(bookColors),bookstall,true);placard(choose(['旅','詩','山','夢','本']),.10,.14,-.36+i*.18,.267,.015,{bg:choose(bookColors),ink:'#e2d3b5',border:false,fontSize:150},bookstall).rotation.x=-Math.PI/2;}
+// 柜台、台灯、算盘、收银机与包书纸。
+box(1.62,.78,.59,.66,.75,-.57,'#77523e',shop,true);
+box(1.76,.09,.70,.66,1.18,-.57,'#a87850',shop,true);
+for(let i=0;i<6;i++)box(.55,.018,.35,.98,1.24+i*.02,-.48,i%2?'#c3a173':'#cfb284',shop);
+const register=group(.45,1.25,-.64,shop);
+box(.39,.13,.31,0,.065,0,'#586560',register,true);
+const reg=box(.31,.25,.21,0,.23,-.03,'#6a7469',register,true);reg.rotation.x=-.12;
+box(.23,.10,.018,0,.32,.086,'#c6b898',register);
+placard('¥ 280',.19,.065,0,.32,.098,{bg:'#c6b898',fontSize:90,border:false},register);
+for(let row=0;row<3;row++)for(let j=0;j<5;j++)ball(.014,-.13+j*.06,.155+row*.035,.132,'#dad1ad',register);
+const abacus=group(-.04,1.24,-.28,shop);box(.39,.035,.23,0,0,0,'#4d3d35',abacus,true);
+for(let i=0;i<7;i++){rod([-.15+i*.05,.035,-.09],[-.15+i*.05,.035,.09],.006,'#ab9876',abacus);for(let j=0;j<5;j++){const b=ball(.017,-.15+i*.05,.04,-.07+j*.03,'#b8854b',abacus);b.scale.y=.55;}}
+rod([1.29,1.23,-.83],[1.29,1.69,-.83],.015,'#514d42',shop);
+mesh(new ConeGeometry(.19,.18,16,1,true),toon('#7c9169'),1.29,1.66,-.83,shop);
+ball(.046,1.29,1.57,-.83,glowMat,shop);
+const deskLight=new PointLight('#ffca7e',1.5,2.4,2);deskLight.position.set(1.29,1.52,-.83);shop.add(deskLight);
+placard('文 学',.53,.22,-1.23,2.36,-1.377,{fontSize:96},shop);
+placard('旅 と 暮 ら し',.98,.21,.91,2.36,-1.377,{fontSize:87},shop);
+// 纸箱里的橘猫，闭眼、耳朵、胡须和尾巴。
+const catBox=group(1.29,.39,.50,shop);
+box(.63,.14,.47,0,.07,0,'#ad895f',catBox,true);
+for(const x of [-.29,.29])box(.035,.25,.47,x,.15,0,'#bf9c6e',catBox);
+box(.60,.25,.035,0,.15,-.22,'#c3a374',catBox);
+box(.60,.11,.035,0,.08,.22,'#c6a373',catBox);
+const cat=group(0,.21,0,catBox);
+const body=ball(.23,.02,.02,0,'#ce8b48',cat);body.scale.set(1.13,.72,.78);
+const head=ball(.135,-.16,.105,.08,'#dd9a55',cat);head.scale.set(1,.88,.9);
+const catEars=[];
+for(const x of [-.242,-.095]){const e=mesh(new ConeGeometry(.060,.11,3),toon('#d89952'),x,.234,.055,cat);e.rotation.z=x<-.2?.20:-.20;catEars.push(e);}
+for(const x of [-.20,-.12])curve([[x-.025,.112,.190],[x,.105,.196],[x+.023,.115,.19]],.006,'#6c5044',cat);
+ball(.012,-.16,.084,.204,'#976354',cat);
+for(let i=0;i<3;i++)line([[-.16,.075,.19],[-.29,.09-i*.023,.20]],'#f0d4a1',cat);
+for(let i=0;i<4;i++){const s=box(.025,.012,.22,-.07+i*.055,.158,-.015,'#ac693d',cat);s.rotation.z=-.1;}
+const tail=group(.18,.035,-.01,cat);
+curve([[0,0,0],[.12,.01,.13],[.07,.02,.23],[-.11,.01,.23],[-.17,.02,.17]],.043,'#d89a52',tail);
+// 摆头电风扇。
+const fan=group(-.63,.37,.36,shop);
+box(.35,.08,.29,0,.04,0,'#6a857e',fan,true);
+cyl(.026,.035,.70,0,.43,0,'#739084',fan);
+const fanHead=group(0,.85,0,fan);
+const fanRing=mesh(new TorusGeometry(.25,.015,7,36),'#758f83',0,0,.08,fanHead);
+for(let i=0;i<12;i++){const a=i*Math.PI/6;rod([0,0,.105],[Math.cos(a)*.25,Math.sin(a)*.25,.09],.005,'#899e8c',fanHead);}
+for(const r of [.09,.17])mesh(new TorusGeometry(r,.006,5,24),'#819486',0,0,.102,fanHead);
+const blades=group(0,0,.04,fanHead);
+for(let i=0;i<3;i++){const g=group(0,0,0,blades);g.rotation.z=i*Math.PI*2/3;const b=ball(.14,.105,.02,0,'#9da990',g);b.scale.set(1,.45,.12);}
+ball(.045,0,0,.12,'#b1b59a',fanHead);
+// 阁楼：真正的榻榻米、画本、颜料盒、吉他与纸罩灯。
+for(let i=0;i<3;i++)for(let j=0;j<2;j++){
+ box(1.28,.045,1.47,-1.35+i*1.35,3.0,-.76+j*1.52,choose(['#b0ab7c','#bdba88','#aca87c']),shop,true);
+ box(.035,.049,1.46,-1.96+i*1.35,3.003,-.76+j*1.52,'#637367',shop);
+ for(let k=0;k<13;k++)box(1.21,.002,.005,-1.35+i*1.35,3.025,-1.40+j*1.52+k*.105,'#c6c091',shop);
+}
+box(1.22,.075,.73,.08,3.43,.41,'#9d714e',shop,true);
+for(const x of [-.40,.55])for(const z of [.16,.67])box(.055,.36,.055,x,3.23,z,C.wood,shop);
+box(.53,.018,.34,-.10,3.48,.41,C.paper,shop,true);
+line([[-.10,3.492,.25],[-.10,3.492,.57]],'#9b8f78',shop);
+for(let i=0;i<6;i++)patch(.045,.025,rand(-.29,.08),3.493,rand(.30,.52),choose(['#809795','#ce9778','#998a9d']),shop);
+box(.25,.04,.19,.42,3.50,.40,'#756a63',shop);
+for(let i=0;i<6;i++)ball(.018,.33+i*.035,3.526,.40,choose(['#c36d54','#ebbc65','#7b9c7b','#7b8fa1']),shop);
+const guitar=group(-1.44,3.43,.93,shop);guitar.rotation.z=-.19;
+const lower=ball(.21,0,0,0,'#bc8550',guitar);lower.scale.set(.9,1.1,.26);
+const upper=ball(.16,0,.23,0,'#c38c53',guitar);upper.scale.set(.88,1,.31);
+box(.07,.65,.05,0,.60,0,'#79513b',guitar,true);box(.10,.17,.06,0,1.0,0,'#9b6e45',guitar);
+mesh(new THREE.CircleGeometry(.066,20),basic('#4b3c37'),0,.13,.055,guitar);
+for(let i=0;i<4;i++)line([[-.017+i*.011,-.10,.06],[-.017+i*.011,1.03,.045]],'#cbbf98',guitar);
+box(.11,.025,.015,0,-.10,.06,'#634a3d',guitar);
+const paperLamp=group(1.41,3.03,.75,shop);
+cyl(.16,.18,.05,0,.025,0,C.darkWood,paperLamp);
+rod([0,.04,0],[0,.39,0],.025,'#7d6750',paperLamp);
+const shade=cyl(.19,.24,.40,0,.42,0,new MeshLambertMaterial({color:'#ffe3a7',emissive:'#d19642',emissiveIntensity:.45}),paperLamp,20);
+for(let i=0;i<8;i++)mesh(new TorusGeometry(.24-i*.006,.004,4,24),'#cdb281',0,.24+i*.049,0,paperLamp).rotation.x=Math.PI/2;
+const atticLight=new PointLight('#ffd89c',2.0,3.3,2);atticLight.position.set(1.41,3.45,.75);shop.add(atticLight);flicker.push({light:atticLight,base:2,phase:2});
+// 墙角木梯、捆扎报纸与信箱。
+for(const x of [-.32,.32])rod([x,0,0],[x,1.7,-.24],.025,'#ad8961',shop);
+const ladder=group(-2.29,.26,-.72,shop);ladder.rotation.z=-.13;
+for(const x of [-.21,.21])rod([x,0,0],[x,1.75,-.26],.027,'#a4885e',ladder);
+for(let i=0;i<7;i++)rod([-.21,.14+i*.23,-i*.033],[.21,.14+i*.23,-i*.033],.021,'#bda076',ladder);
+for(let n=0;n<3;n++){
+ const g=group(-2.45,.10+n*.18,.60,shop);
+ for(let j=0;j<7;j++)box(.55,.020,.39,rand(-.025,.025),j*.022,rand(-.012,.012),j%2?'#c7bb9c':'#ddd0ae',g);
+ box(.018,.16,.41,-.1,.07,0,'#7f7660',g);box(.57,.16,.018,0,.07,.04,'#7f7660',g);
+}
+box(.29,.40,.13,-2.16,1.21,1.07,'#8c8174',shop,true);
+box(.20,.028,.014,-2.16,1.29,1.145,'#514d47',shop);
+// 屋外小踏步。
+box(2.30,.17,.44,.12,.09,2.02,'#a49582',shop,true);
+box(2.50,.10,.43,.12,.02,2.40,'#b1a28d',shop,true);
+
+// 朱红邮筒：圆筒、帽檐、白色邮便标记及褪色广告。
+const post=group(1.61,.51,.55);
+cyl(.14,.17,.28,0,.14,0,'#5e6259',post);
+cyl(.22,.24,.90,0,.69,0,'#bc4b3e',post,20);
+cyl(.26,.25,.09,0,1.17,0,'#d3674b',post,24);
+const cap=ball(.24,0,1.20,0,'#ca5940',post);cap.scale.y=.30;
+box(.21,.055,.013,0,1.00,.229,'#533f3c',post);
+placard('〒',.22,.20,0,.78,.244,{bg:'#bc4b3e',ink:'#f1d9b3',fontSize:185,border:false},post);
+placard('郵 便',.19,.09,0,.57,.244,{bg:'#bc4b3e',ink:'#f1d9b3',fontSize:90,border:false},post);
+placard('山の便り',.17,.15,-.14,.86,.18,{bg:'#caa076',ink:'#9b684e',fontSize:79,border:false},post);
+for(let i=0;i<12;i++){const a=rand(-1.15,1.15);box(.025,.025,.008,Math.sin(a)*.237,rand(.34,1.12),Math.cos(a)*.237,'#db9c70',post);}
+// 盖着帆布的旧饮料售卖机。
+const vending=group(6.0,.53,-.46);
+box(.74,1.53,.59,0,.765,0,'#8a9890',vending,true);
+box(.59,1.03,.025,0,.94,.31,'#687b79',vending);
+for(let row=0;row<3;row++)for(let j=0;j<3;j++){
+ cyl(.039,.039,.13,-.19+j*.18,.73+row*.25,.345,choose(['#d5ac6d','#ab6858','#a4b8a0']),vending,8);
+ box(.09,.018,.025,-.19+j*.18,.63+row*.25,.35,'#d4c7a6',vending);
+}
+box(.35,.12,.025,-.08,.24,.315,'#485854',vending);
+box(.028,.07,.015,.25,.65,.327,basic('#ffd994'),vending);
+box(.18,.10,.025,.20,.46,.32,'#8b9689',vending);
+// 顶部布罩和垂下来的布角。
+box(.83,.045,.70,0,1.55,-.015,'#a09a82',vending);
+const canvasCover=mesh(new PlaneGeometry(.85,.70,8,8),new MeshToonMaterial({color:'#aaa58d',side:DoubleSide,gradientMap:gradient}),0,1.32,.375,vending);
+const coverPos=canvasCover.geometry.attributes.position;
+for(let i=0;i<coverPos.count;i++)coverPos.setZ(i,Math.sin(coverPos.getX(i)*24)*.018);
+coverPos.needsUpdate=true;canvasCover.geometry.computeVertexNormals();
+canvasCover.rotation.z=-.07;
+// 老式通勤自行车。
+function bicycle(x,y,z){const g=group(x,y,z);g.rotation.y=-.43;
+ const rubber=toon('#46484b'),metal=toon('#8a9b95');
+ for(const xx of [-.49,.49]){
+ mesh(new TorusGeometry(.32,.025,7,32),rubber,xx,.34,0,g);
+ mesh(new TorusGeometry(.285,.012,5,24),metal,xx,.34,0,g);
+ for(let i=0;i<12;i++){const a=i*Math.PI/6;rod([xx,.34,.0],[xx+Math.cos(a)*.28,.34+Math.sin(a)*.28,0],.004,'#bdc1ac',g);}
+ }
+ const f='#707d70';for(const [a,b]of [[[-.49,.34,0],[-.12,.38,0]],[[-.49,.34,0],[-.24,.87,0]],[[-.24,.87,0],[-.12,.38,0]],[[-.24,.87,0],[.33,.82,0]],[[.33,.82,0],[-.12,.38,0]],[[.33,.82,0],[.49,.34,0]]])rod(a,b,.018,f,g);
+ rod([-.24,.85,0],[-.28,.98,0],.017,'#a8b0a3',g);box(.24,.045,.12,-.29,1.0,0,'#5e5046',g);
+ rod([.33,.82,0],[.30,1.07,0],.02,'#b6b6a5',g);
+ rod([.30,1.07,-.15],[.30,1.07,.15],.019,'#9faea2',g);
+ rod([-.12,.38,-.10],[-.12,.38,.10],.013,'#b5b4a0',g);
+ box(.12,.03,.07,-.20,.30,.11,'#776b5b',g);
+ box(.38,.055,.25,-.54,.72,0,'#8e9785',g);
+ const basket=group(.47,.99,0,g);
+ for(const side of [-1,1])for(let i=0;i<6;i++)rod([-.14+i*.056,-.12,side*.14],[-.19+i*.076,.14,side*.18],.007,'#968d73',basket);
+ for(const y of [-.1,.02,.14]){rod([-.18,y,-.17],[.18,y,-.17],.007,'#948975',basket);rod([-.18,y,.17],[.18,y,.17],.007,'#948975',basket);rod([-.18,y,-.17],[-.18,y,.17],.007,'#948975',basket);rod([.18,y,-.17],[.18,y,.17],.007,'#948975',basket);}
+ box(.20,.29,.18,0,.05,0,'#d6b380',basket,true);
+ return g;}
+bicycle(6.02,.53,-2.0);
+// 复古薄荷色踏板车与温热可乐饼纸袋。
+const scooter=group(3.85,.57,.28);scooter.rotation.y=-.45;
+for(const x of [-.48,.48]){const wheel=mesh(new TorusGeometry(.19,.055,8,20),toon('#42494d'),x,.22,0,scooter);mesh(new CylinderGeometry(.12,.12,.06,14),toon('#b3b6a0'),x,.22,0,scooter).rotation.x=Math.PI/2;}
+const shell=ball(.37,-.31,.48,0,'#95b6a7',scooter);shell.scale.set(1.25,.81,.51);
+box(.61,.09,.32,-.26,.72,0,'#5e5349',scooter,true);
+box(.68,.08,.28,.06,.28,0,'#88a799',scooter);
+const front=box(.14,.60,.35,.38,.56,0,'#a2bdab',scooter,true);front.rotation.z=.18;
+rod([.43,.56,0],[.32,1.02,0],.031,'#b4c1ac',scooter);
+rod([.32,1.02,-.20],[.32,1.02,.20],.028,'#667b70',scooter);
+const headlamp=ball(.105,.43,.96,.0,'#d8ca9f',scooter);headlamp.scale.set(.50,1,1);
+rod([.31,1.02,-.14],[.34,1.25,-.20],.014,'#9caa9b',scooter);
+const mirror=ball(.065,.34,1.25,-.20,'#b9c4b4',scooter);mirror.scale.z=.25;
+rod([.0,.30,.05],[.10,.04,.18],.015,'#726f63',scooter);
+const bag=group(.29,.78,.24,scooter);box(.19,.27,.13,0,0,0,'#d8b17d',bag,true);
+curve([[-.065,.13,0],[-.05,.23,0],[.055,.23,0],[.065,.13,0]],.009,'#a8855b',bag);
+placard('コロッケ',.15,.11,0,0,.07,{bg:'#d8b17d',ink:'#966541',fontSize:87,border:false},bag);
+// 陶盆、菊花与波斯菊。
+function flowers(x,y,z,r=.15){const g=group(x,y,z);cyl(r,r*.65,r*1.45,0,r*.72,0,choose(['#aa775c','#b98261','#927b65']),g,10);cyl(r*1.08,r*1.08,.04,0,r*1.43,0,'#bd8c69',g,10);cyl(r*.88,r*.88,.008,0,r*1.46,0,'#5e5445',g,10);
+ for(let i=0;i<7;i++){const xx=rand(-r*.75,r*.75),zz=rand(-r*.75,r*.75),h=rand(.19,.40);rod([0,r*1.4,0],[xx,r*1.4+h,zz],.008,'#637957',g);const leaf=ball(.060,xx*.7,r*1.4+h*.55,zz,'#7e945c',g);leaf.scale.set(1,.25,.6);const color=choose(['#f1c45c','#eee0a5','#cf7f87','#d89594']);for(let j=0;j<7;j++){const a=j*Math.PI*2/7;const p=ball(.029,xx+Math.cos(a)*.043,r*1.4+h,zz+Math.sin(a)*.043,color,g);p.scale.y=.45;}ball(.021,xx,r*1.4+h+.008,zz,'#b98d4a',g);}
+}
+flowers(1.02,.53,-.62,.16);flowers(5.87,.54,-.98,.19);flowers(2.00,.56,-.20,.13);flowers(-.40,.53,.08,.15);flowers(5.42,.54,-.20,.13);
+// 复古路灯，暖金光晕不依赖后处理。
+const lampPost=group(.77,.56,.69);
+cyl(.11,.16,.15,0,.075,0,'#575d56',lampPost);
+cyl(.037,.055,2.46,0,1.30,0,'#535b53',lampPost);
+curve([[0,2.44,0],[0,2.67,0],[.20,2.79,0],[.45,2.69,0],[.48,2.51,0]],.031,'#535b53',lampPost);
+const lantern=group(.48,2.34,0,lampPost);
+box(.28,.32,.28,0,0,0,new MeshLambertMaterial({color:'#ffe6aa',emissive:'#ffcb78',emissiveIntensity:.65}),lantern);
+mesh(new ConeGeometry(.25,.18,4),toon('#4e5c55'),0,.25,0,lantern).rotation.y=Math.PI/4;
+for(const x of [-.14,.14])for(const z of [-.14,.14])box(.018,.36,.018,x,0,z,'#556354',lantern);
+box(.34,.045,.34,0,-.19,0,'#526151',lantern);
+const streetLight=new PointLight('#ffd598',2.7,4.5,2);streetLight.position.set(.48,2.30,0);lampPost.add(streetLight);flicker.push({light:streetLight,base:2.7,phase:4});
+const haloTexture=textureCanvas(128,128,(ctx,w,h)=>{const g=ctx.createRadialGradient(64,64,0,64,64,64);g.addColorStop(0,'rgba(255,209,122,.50)');g.addColorStop(.15,'rgba(255,192,98,.14)');g.addColorStop(1,'rgba(255,160,80,0)');ctx.fillStyle=g;ctx.fillRect(0,0,w,h);});
+const halos=[];
+function halo(x,y,z,size,parent){const m=mesh(new PlaneGeometry(size,size),new MeshBasicMaterial({map:haloTexture,transparent:true,depthWrite:false,blending:AdditiveBlending}),x,y,z,parent);m.castShadow=false;halos.push(m);return m;}
+halo(.48,2.34,0,1.45,lampPost);halo(0,2.64,2.06,1.7,shop);halo(1.41,3.44,.75,.8,shop);
+
+// 右前角的山涧是完整地块里切开的透明水渠。
+const waterGroup=group(0,0,0);
+const streamX=5.92,streamZ=5.54,streamW=1.86,streamD=2.58;
+// 淡琥珀透明切面挡板、河床与底部卵石。
+box(streamW,.14,streamD,streamX,-.97,streamZ,'#7c7770',waterGroup,true);
+box(streamW,.90,.025,streamX,-.48,6.84,new MeshBasicMaterial({color:'#d3a367',transparent:true,opacity:.38,depthWrite:false}),waterGroup);
+box(.025,.90,streamD,6.86,-.48,streamZ,new MeshBasicMaterial({color:'#aebd9e',transparent:true,opacity:.27,depthWrite:false}),waterGroup);
+for(let i=0;i<63;i++){const m=rock(rand(.06,.14),rand(5.04,6.77),-.82,rand(4.34,6.75),choose(['#b3a286','#918e7e','#cfb28a','#7e8c88']),waterGroup);m.scale.y*=.6;}
+// 覆在原底座外侧的水下切片，保证水渠清晰可读。
+box(1.93,1.16,.11,5.93,-.52,6.985,'#9d987b',waterGroup);
+box(.11,1.16,2.73,6.985,-.52,5.57,'#8a9079',waterGroup);
+box(1.83,.79,.025,5.94,-.44,7.049,new MeshBasicMaterial({color:'#d5b57f',transparent:true,opacity:.73}),waterGroup);
+box(.025,.79,2.60,7.049,-.44,5.58,new MeshBasicMaterial({color:'#9faf98',transparent:true,opacity:.75}),waterGroup);
+for(let i=0;i<27;i++){const s=rand(.04,.11);const m=rock(s,rand(5.09,6.80),rand(-.79,-.62),7.073,choose(['#bdb18b','#929887','#cfb98b']),waterGroup);m.scale.z=.5;}
+const waterUniforms={uTime:{value:0},uOpacity:{value:.88}};
+const waterMat=new ShaderMaterial({transparent:true,side:DoubleSide,uniforms:waterUniforms,
+ vertexShader:`varying vec2 vUv;uniform float uTime;void main(){vUv=uv;vec3 p=position;p.z+=sin(p.x*9.+uTime*1.2)*.013+sin(p.y*13.-uTime*.8)*.010;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}`,
+ fragmentShader:`varying vec2 vUv;uniform float uTime;uniform float uOpacity;
+ float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+ void main(){vec2 p=vUv*vec2(13.,21.);p.x+=sin(p.y*.6+uTime*.62)*.75;p.y+=uTime*.62;vec2 cell=floor(p);vec2 f=fract(p);float n=hash(cell);vec3 col=vec3(.34,.47,.51);if(n>.35)col=vec3(.52,.57,.55);if(n>.61)col=vec3(.79,.61,.38);if(n>.77)col=vec3(.94,.71,.39);if(n>.90)col=vec3(.65,.38,.32);float sparkle=step(.96,n)*step(.71,sin(uTime*1.2+cell.x+cell.y*.7))*step(.89,f.y);col=mix(col,vec3(1.,.89,.62),sparkle*.9);gl_FragColor=vec4(col,uOpacity);}`});
+const water=mesh(new PlaneGeometry(1.77,2.48,16,24),waterMat,5.95,.18,5.54,waterGroup);water.rotation.x=-Math.PI/2;water.castShadow=false;
+// 外露切面的水纹与鱼影。
+for(let i=0;i<8;i++)box(rand(.12,.39),.013,.008,rand(5.16,6.70),rand(-.54,-.14),7.074,choose(['#d6b577','#b5b58f','#edd29b']),waterGroup);
+const fish=[];
+function makeFish(x,y,z,sideView=false){const g=group(x,y,z,waterGroup);const b=ball(.075,0,0,0,'#6e7560',g);b.scale.set(1.7,.60,.55);const t=mesh(new ConeGeometry(.055,.10,3),toon('#a58c60'),-.14,0,0,g);t.rotation.z=Math.PI/2;ball(.008,.087,.012,.033,'#343f3e',g);fish.push({g,x,y,z,phase:rand(0,6),sideView});}
+makeFish(5.45,-.38,7.09,true);makeFish(6.38,-.56,7.09,true);makeFish(6.5,-.20,6.2);
+// 溪边天然山石、水口、地藏像。
+for(let i=0;i<19;i++){const a=i/18*Math.PI*1.4;rock(rand(.18,.34),5.92+Math.cos(a)*1.01,.13,5.48+Math.sin(a)*1.30,choose(['#6d7c73','#919485','#7a877b']));}
+for(let i=0;i<12;i++){const x=rand(4.7,5.25),z=rand(5.8,6.6);rock(rand(.05,.12),x,.21,z,'#7c915f');}
+const jizo=group(4.68,.23,6.28);jizo.rotation.y=.36;
+box(.47,.15,.43,0,.075,0,'#858b80',jizo,true);
+const stoneBody=cyl(.12,.21,.46,0,.38,0,'#9da392',jizo,10);
+ball(.16,0,.73,0,'#abb09c',jizo);
+const hat=mesh(new ConeGeometry(.27,.14,14),toon('#9b8f6a'),0,.90,0,jizo);
+const bib=mesh(new PlaneGeometry(.21,.23),new MeshToonMaterial({color:'#c47c66',side:DoubleSide,gradientMap:gradient}),0,.46,.168,jizo);
+placard('南無',.10,.15,0,.40,.174,{vertical:true,bg:'#c47c66',ink:'#9f654f',border:false},jizo);
+for(const x of [-.057,.057])curve([[x-.025,.746,.145],[x,.733,.158],[x+.022,.744,.146]],.005,'#666e65',jizo);
+ball(.019,0,.695,.159,'#878f7e',jizo);
+for(let i=0;i<10;i++)rock(rand(.04,.08),rand(-.28,.29),.11,rand(-.2,.20),'#758459',jizo);
+const splash=[];
+for(let i=0;i<18;i++){const m=ball(rand(.008,.020),5.12,.24,5.0,basic('#f3dfb3',.7));m.castShadow=false;splash.push({m,phase:rand(0,6.28),r:rand(.05,.17)});}
+// 水面的低多边形环状涟漪。
+const ripples=[];
+for(let i=0;i<4;i++){const m=mesh(new TorusGeometry(.11,.005,4,22),basic('#f5d79a',.5),5.19,.213,5.02);m.rotation.x=-Math.PI/2;m.castShadow=false;ripples.push(m);}
+
+// 坡顶鸟居与参道，隐在林间。
+const torii=group(-2.32,1.44,-5.08);torii.rotation.y=-.12;
+for(const x of [-.70,.70]){
+ cyl(.105,.14,1.69,x,.84,0,'#ae5b42',torii);
+ cyl(.145,.145,.14,x,.07,0,'#5c5a54',torii);
+}
+box(1.90,.13,.22,0,1.47,0,'#b76649',torii,true);
+box(2.15,.12,.27,0,1.88,0,'#7b4c3e',torii,true);
+curve([[-1.17,1.97,0],[-.77,1.90,0],[0,1.88,0],[.77,1.90,0],[1.17,1.97,0]],.075,'#5a4940',torii);
+box(.13,.41,.10,0,1.66,0,'#b46b49',torii);
+placard('山神',.18,.30,0,1.67,.075,{vertical:true,bg:'#646052',ink:'#dfc586',border:false},torii);
+curve([[-.72,1.52,.14],[-.35,1.39,.14],[.35,1.39,.14],[.72,1.52,.14]],.022,'#b6a078',torii);
+for(const x of [-.4,0,.4]){const p=mesh(new PlaneGeometry(.06,.18),new MeshLambertMaterial({color:'#ead9b3',side:DoubleSide}),x,1.32,.15,torii);p.rotation.z=.2;}
+for(let i=0;i<4;i++)box(1.25,.13,.36,-2.32,1.40+i*.11,-5.35-i*.30,'#9c9a87',world,true);
+// 石灯笼。
+for(const x of [-3.55,-.93]){
+ box(.30,.10,.30,x,1.44,-5.2,'#8d9380');box(.14,.52,.14,x,1.74,-5.2,'#9b9e89');
+ box(.28,.28,.28,x,2.07,-5.2,'#8b937e',world,true);box(.13,.13,.01,x,2.07,-5.05,basic('#e2c78a'));
+ mesh(new ConeGeometry(.31,.17,4),'#7f8976',x,2.30,-5.2).rotation.y=Math.PI/4;
+}
+
+// 纤细枝干与由几百片透光叶组成的枫树、银杏。
+const trees=[];
+const mapleShape=new Shape();
+mapleShape.moveTo(0,-.46);mapleShape.lineTo(-.09,-.12);mapleShape.lineTo(-.40,-.17);mapleShape.lineTo(-.28,.04);mapleShape.lineTo(-.54,.17);mapleShape.lineTo(-.24,.23);mapleShape.lineTo(-.28,.47);mapleShape.lineTo(-.06,.32);mapleShape.lineTo(0,.65);mapleShape.lineTo(.10,.32);mapleShape.lineTo(.32,.47);mapleShape.lineTo(.28,.21);mapleShape.lineTo(.54,.17);mapleShape.lineTo(.29,.02);mapleShape.lineTo(.40,-.17);mapleShape.lineTo(.10,-.12);mapleShape.closePath();
+const mapleGeo=new ShapeGeometry(mapleShape);
+const ginkgoShape=new Shape();ginkgoShape.moveTo(0,-.35);ginkgoShape.lineTo(-.10,-.03);ginkgoShape.absarc(0,-.03,.45,Math.PI*.96,Math.PI*.04,true);ginkgoShape.lineTo(.07,-.07);ginkgoShape.lineTo(0,-.35);ginkgoShape.closePath();
+const ginkgoGeo=new ShapeGeometry(ginkgoShape);
+const leafColors={maple:['#cf5945','#e77849','#ef9652','#b84742','#edb061','#cc6a49'],ginkgo:['#d3a44e','#efc268','#e1b458','#f1d37f','#b5924f']};
+function tree(x,y,z,h,type='maple'){
+ const g=group(x,y,z);const trunkColor=type==='maple'?'#69574b':'#80715a';
+ const bend=rand(-.22,.22);
+ rod([0,0,0],[bend,h*.69,.05],.10,trunkColor,g,8);
+ rod([bend,h*.45,.03],[bend-.12,h*.98,-.03],.054,trunkColor,g,7);
+ const crown=group(bend,h*.67,0,g);const clusters=[];
+ for(let i=0;i<8;i++){
+  const a=i*2.4,r=rand(.34,.83)*h*.35;const xx=Math.cos(a)*r,zz=Math.sin(a)*r,yy=rand(-.10,.50)*h*.5;
+  rod([0,-h*.16,0],[xx,yy,zz],.032,trunkColor,crown,6);
+  rod([xx*.6,yy*.6,zz*.6],[xx*1.1,yy+.26,zz*.9],.018,trunkColor,crown,5);
+  clusters.push({x:xx,y:yy+.12,z:zz,r:rand(.42,.64)*h*.41});
+ }
+ const colors=leafColors[type];
+ const leafMat=new MeshToonMaterial({color:'#ffffff',gradientMap:gradient,side:DoubleSide});
+ const inst=new InstancedMesh(type==='maple'?mapleGeo:ginkgoGeo,leafMat,440);
+ const o=new Object3D();
+ for(let i=0;i<440;i++){
+  const c=clusters[i%clusters.length];const a=rand(0,Math.PI*2),u=rand(-1,1),rr=Math.cbrt(rand())*c.r;
+  o.position.set(c.x+Math.sqrt(1-u*u)*Math.cos(a)*rr,c.y+u*rr*.65,c.z+Math.sqrt(1-u*u)*Math.sin(a)*rr);
+  o.rotation.set(rand(-2.5,2.5),rand(-Math.PI,Math.PI),rand(-Math.PI,Math.PI));o.scale.setScalar(rand(.17,.33)*h*.36);o.updateMatrix();inst.setMatrixAt(i,o.matrix);inst.setColorAt(i,new Color(choose(colors)));
+ }
+ inst.castShadow=true;inst.receiveShadow=true;crown.add(inst);
+ for(let i=0;i<4;i++){const a=i*Math.PI/2;curve([[0,.09,0],[Math.cos(a)*.18,.02,Math.sin(a)*.18],[Math.cos(a)*.43,-.02,Math.sin(a)*.43]],.027,trunkColor,g);}
+ trees.push({crown,phase:rand(0,6),x,z,y:y+h*.9,h,type});
+}
+tree(-5.52,1.36,-4.98,3.80,'maple');
+tree(-3.96,1.37,-6.15,4.12,'ginkgo');
+tree(-.52,1.39,-6.07,3.55,'maple');
+tree(1.38,1.60,-6.00,3.43,'ginkgo');
+tree(5.78,1.63,-5.93,3.72,'maple');
+tree(-6.12,.53,-1.21,3.25,'maple');
+tree(-6.22,.11,5.96,2.64,'maple');
+// 苔藓与落叶堆积，控制分布以保留视觉留白。
+batches(geometries.ico,['#737f57','#92945f','#626f52'],110,o=>{const x=rand(-6.7,6.7),z=rand(-6.7,-2.5);o.position.set(x,x<-0.3?1.35:1.63,z);o.scale.set(rand(.05,.16),rand(.015,.04),rand(.05,.16));});
+const staticLeaves=new InstancedMesh(mapleGeo,new MeshToonMaterial({color:'#ffffff',gradientMap:gradient,side:DoubleSide}),250);
+const leafDummy=new Object3D();
+for(let i=0;i<250;i++){
+ let x=rand(-6.6,6.6),z=rand(-.45,6.7),y=z>3.6?.19:z>2?.69:.53;
+ if(x>4.8&&z>4.2){x=rand(-5.5,4.3);}
+ leafDummy.position.set(x,y+.017,z);leafDummy.rotation.set(-Math.PI/2,0,rand(0,6.28));leafDummy.scale.setScalar(rand(.06,.12));leafDummy.updateMatrix();staticLeaves.setMatrixAt(i,leafDummy.matrix);staticLeaves.setColorAt(i,new Color(choose(leafColors.maple)));
+}
+staticLeaves.receiveShadow=true;world.add(staticLeaves);
+// 屋面零星红叶。
+for(let i=0;i<15;i++){const x=rand(1.1,5.5),z=rand(-2.4,-.5),y=6.20-(z+2.54)*.44;const l=mesh(mapleGeo,toon(choose(leafColors.maple)),x,y,z);l.scale.setScalar(rand(.07,.12));l.rotation.set(-1.15,0,rand(0,6));}
+
+// 木电线杆、瓷绝缘子、斜穿天空的细线与小鸟。
+const poles=[[-5.35,.55,.75],[6.46,.54,1.53],[.02,1.49,-6.36]];
+for(const [x,y,z]of poles){
+ cyl(.055,.085,4.77,x,y+2.385,z,'#77614d',world,10);
+ box(.95,.10,.10,x,y+4.30,z,'#7e6a53',world,true);
+ box(.70,.08,.09,x,y+4.61,z,'#7e6a53');
+ for(const off of [-.37,0,.37]){cyl(.045,.036,.13,x+off,y+4.42,z,'#dad6b8',world,8);cyl(.055,.055,.035,x+off,y+4.45,z,'#e4dcbe',world,8);}
+ for(let i=0;i<4;i++)box(.11,.055,.10,x,y+1.1+i*.18,z+.03,'#9d9982');
+}
+const wireCurves=[];
+for(const offset of [-.36,0,.36]){
+ const pts=[[-5.35+offset,4.98,.75],[-2,4.57,1.0],[2.8,4.58,1.29],[6.46+offset,4.96,1.53]];
+ const c=new CatmullRomCurve3(pts.map(p=>new Vector3(...p)));wireCurves.push(c);line(c.getPoints(72).map(v=>v.toArray()),'#514c55');
+ const pts2=[[6.46+offset,5.0,1.53],[4.3,5.1,-1.3],[1.9,5.6,-4.1],[.02+offset,5.96,-6.36]];
+ const c2=new CatmullRomCurve3(pts2.map(p=>new Vector3(...p)));line(c2.getPoints(60).map(v=>v.toArray()),'#5f5860');
+}
+const birds=[];
+for(const t of [.18,.23,.66]){const p=wireCurves[1].getPoint(t);const b=group(p.x,p.y+.07,p.z);
+ const bird=ball(.068,0,0,0,'#55565a',b);bird.scale.set(1,.85,.7);ball(.043,.055,.06,0,'#4c5155',b);
+ const beak=mesh(new ConeGeometry(.018,.048,4),'#bf9b67',.100,.062,0,b);beak.rotation.z=-Math.PI/2;
+ rod([0,-.015,0],[0,-.067,0],.007,'#6d675b',b);
+ const tailBird=mesh(new ConeGeometry(.035,.11,4),'#525559',-.085,-.01,0,b);tailBird.rotation.z=Math.PI/2;
+ birds.push({g:b,phase:rand(0,6)});
+}
+
+// 漫射云带与远景山谷。属于场景景深而非 UI。
+const backdrop=group(0,0,0,scene);
+function mountainRibbon(points,color){const shape=new Shape();shape.moveTo(points[0][0],-4);for(const p of points)shape.lineTo(p[0],p[1]);shape.lineTo(points.at(-1)[0],-4);shape.closePath();return mesh(new ShapeGeometry(shape),new MeshBasicMaterial({color,transparent:true,opacity:.34,side:DoubleSide,depthWrite:false}),0,0,-22,backdrop);}
+const backMount=mountainRibbon([[-43,1],[-32,4],[-25,3],[-18,7],[-12,4],[-7,6],[-1,3],[6,5],[14,1],[23,4],[36,0]],'#9c94b0');backMount.position.y=-.6;
+const backMount2=mountainRibbon([[-38,-.2],[-28,2],[-19,.7],[-12,3],[-7,1.8],[0,3.8],[8,1],[18,2.5],[28,-1]],'#ae9eae');backMount2.position.z=-18;backMount2.position.y=-1;
+// 柔软的云沿保持较低透明度，不盖住模型的轮廓。
+const cloudTex=textureCanvas(512,128,(ctx,w,h)=>{
+ const grad=ctx.createRadialGradient(w/2,h/2,0,w/2,h/2,w/2);grad.addColorStop(0,'rgba(255,223,190,.32)');grad.addColorStop(.55,'rgba(255,215,181,.16)');grad.addColorStop(1,'rgba(255,216,190,0)');ctx.fillStyle=grad;ctx.fillRect(0,0,w,h);
+});
+const clouds=[];
+for(let i=0;i<7;i++){const m=mesh(new PlaneGeometry(rand(9,19),rand(.45,1.1)),new MeshBasicMaterial({map:cloudTex,transparent:true,depthWrite:false,color:i%2?'#ffdcbb':'#e6c1ba'}),rand(-25,20),rand(5,11),rand(-28,-20),backdrop);m.rotation.z=rand(-.025,.025);m.castShadow=false;clouds.push({m,x:m.position.x,phase:rand(0,6)});}
+// 漂浮底座的软阴影。
+const shadowTex=textureCanvas(256,256,(ctx,w,h)=>{const g=ctx.createRadialGradient(128,128,15,128,128,125);g.addColorStop(0,'rgba(72,53,77,.28)');g.addColorStop(.6,'rgba(72,53,77,.12)');g.addColorStop(1,'rgba(72,53,77,0)');ctx.fillStyle=g;ctx.fillRect(0,0,w,h);});
+const groundShadow=mesh(new PlaneGeometry(24,24),new MeshBasicMaterial({map:shadowTex,transparent:true,depthWrite:false}),0,-1.90,0,scene);groundShadow.rotation.x=-Math.PI/2;groundShadow.castShadow=false;
+
+// 微小落叶，落地后停留，渠中叶片则随水流走。
+const falling=[];
+for(let i=0;i<35;i++){
+ const type=i%4===0?'ginkgo':'maple';const m=mesh(type==='maple'?mapleGeo:ginkgoGeo,new MeshToonMaterial({color:choose(leafColors[type]),gradientMap:gradient,side:DoubleSide}),0,0,0);
+ m.scale.setScalar(rand(.07,.12));m.castShadow=false;
+ const t=choose(trees);falling.push({m,t,age:rand(0,25),life:rand(18,29),phase:rand(0,6),drift:rand(.1,.6),x:t.x+rand(-.8,.8),z:t.z+rand(-.5,.8),roof:false});
+}
+for(let i=0;i<5;i++){
+ const m=mesh(mapleGeo,new MeshBasicMaterial({color:choose(leafColors.maple),side:DoubleSide}),rand(5.2,6.6),.215,rand(4.4,6.6));m.scale.setScalar(.09);m.rotation.x=-Math.PI/2;
+ falling.push({m,water:true,phase:rand(0,10),x:m.position.x,z:m.position.z});
+}
+// 金色尘埃，使用一个点精灵绘制批次。
+const dustCount=115,dustPositions=new Float32Array(dustCount*3),dustSeeds=[];
+for(let i=0;i<dustCount;i++){const p={x:rand(-4.9,5.5),y:rand(.8,4.8),z:rand(-2.7,2.8),phase:rand(0,10)};dustSeeds.push(p);dustPositions.set([p.x,p.y,p.z],i*3);}
+const dustGeometry=new BufferGeometry();dustGeometry.setAttribute('position',new Float32BufferAttribute(dustPositions,3));
+const dustMaterial=new ShaderMaterial({transparent:true,depthWrite:false,blending:AdditiveBlending,uniforms:{uPixel:{value:Math.min(devicePixelRatio,1.7)}},
+ vertexShader:`uniform float uPixel;varying float vAlpha;void main(){vec4 mv=modelViewMatrix*vec4(position,1.);gl_Position=projectionMatrix*mv;gl_PointSize=clamp(48./-mv.z,1.,3.)*uPixel;vAlpha=.5;}`,
+ fragmentShader:`varying float vAlpha;void main(){float r=length(gl_PointCoord-.5);if(r>.5)discard;gl_FragColor=vec4(1.,.77,.42,(1.-r*2.)*vAlpha);}`});
+const dust=new THREE.Points(dustGeometry,dustMaterial);world.add(dust);
+// 斜阳光柱，几何薄幕从窗外延伸至店内，不使用厚重体积雾。
+const rayMat=new ShaderMaterial({transparent:true,depthWrite:false,side:DoubleSide,blending:AdditiveBlending,
+ uniforms:{uTime:{value:0}},vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+ fragmentShader:`varying vec2 vUv;uniform float uTime;void main(){float edge=pow(sin(vUv.x*3.14159265),3.);float fade=sin(vUv.y*3.14159265);float a=edge*fade*.055*(.94+.06*sin(uTime*.32));gl_FragColor=vec4(1.,.73,.40,a);}`});
+for(let i=0;i<4;i++){
+ const m=mesh(new PlaneGeometry(.24+i*.09,3.4),rayMat,-.1+i*.84,1.53,-.37,shop);m.rotation.z=-.90;m.rotation.y=.20;m.castShadow=false;
+}
+for(let i=0;i<3;i++){const m=mesh(new PlaneGeometry(.24,2.4),rayMat,-4.7+i*1.6,1.78,2.55);m.rotation.z=-.92;m.castShadow=false;}
+// 山谷缓缓移动的薄暮雾气。
+const mist=[];
+for(let i=0;i<3;i++){const m=mesh(new PlaneGeometry(9,1.1),new MeshBasicMaterial({map:cloudTex,transparent:true,opacity:.29,depthWrite:false,color:'#c5c0ce',side:DoubleSide}),-2+i*3.0,2.1+i*.18,-6.5-i*.2);m.castShadow=false;mist.push({m,x:m.position.x});}
+
+// 偶发远景电车：没有近景人物，不破坏小站的宁静。
+const train=group(-7,1.95,-6.45);train.visible=false;
+for(let i=0;i<3;i++){
+ const car=group(i*.85,0,0,train);
+ box(.80,.38,.27,0,0,0,'#8c8b78',car,true);
+ box(.80,.065,.29,0,.23,0,'#697a79',car);
+ box(.80,.035,.012,0,-.10,.144,'#c6956c',car);
+ for(let j=0;j<4;j++)box(.12,.14,.012,-.28+j*.185,.045,.145,basic('#ffe4a6'),car);
+ for(const x of [-.24,.24])ball(.055,x,-.23,0,'#4d5960',car);
+}
+const trainGlow=new PointLight('#ffd99d',0,4);trainGlow.position.set(0,0,.2);train.add(trainGlow);
+// 声音只在用户首次操作后初始化，遵守浏览器自动播放策略。
+let audio=null,audioReady=false;
+function unlockAudio(){if(audioReady)return;try{audio=new (window.AudioContext||window.webkitAudioContext)();audio.resume().then(()=>{audioReady=true;}).catch(()=>{});}catch{}}
+function distantBell(){if(!audioReady||!audio||audio.state!=='running')return;const t=audio.currentTime;for(let i=0;i<2;i++){
+ const osc=audio.createOscillator(),gain=audio.createGain();osc.type='sine';osc.frequency.value=i?1046.5:783.99;gain.gain.setValueAtTime(0,t+i*.55);gain.gain.linearRampToValueAtTime(.006,t+i*.55+.05);gain.gain.exponentialRampToValueAtTime(.0001,t+i*.55+1.8);osc.connect(gain);gain.connect(audio.destination);osc.start(t+i*.55);osc.stop(t+i*.55+2);
+}}
+
+// 自包含轨道控制：鼠标 / 触屏旋转，双指缩放和平移，右键平移。
+const controls={theta:.70,phi:1.05,radius:30,target:new Vector3(0,1.78,0),goalTheta:.70,goalPhi:1.05,goalRadius:30,goalTarget:new Vector3(0,1.78,0)};
+const canvas=renderer.domElement,pointers=new Map();let gesture=null;
+function adaptiveRadius(){return innerWidth/innerHeight<.8?43:innerWidth/innerHeight<1.15?35:30;}
+controls.radius=controls.goalRadius=adaptiveRadius();
+function metrics(){const ps=[...pointers.values()];if(ps.length>1){return {x:(ps[0].x+ps[1].x)/2,y:(ps[0].y+ps[1].y)/2,d:Math.hypot(ps[0].x-ps[1].x,ps[0].y-ps[1].y),n:ps.length};}return ps.length?{...ps[0],d:0,n:1}:null;}
+function pan(dx,dy){const scale=controls.goalRadius*.0012;const right=new Vector3(Math.cos(controls.theta),0,-Math.sin(controls.theta));controls.goalTarget.addScaledVector(right,-dx*scale);controls.goalTarget.y+=dy*scale;controls.goalTarget.x=Math.max(-5,Math.min(5,controls.goalTarget.x));controls.goalTarget.y=Math.max(-.1,Math.min(5,controls.goalTarget.y));controls.goalTarget.z=Math.max(-5,Math.min(5,controls.goalTarget.z));}
+canvas.addEventListener('pointerdown',e=>{canvas.focus({preventScroll:true});unlockAudio();pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,button:e.button});canvas.setPointerCapture(e.pointerId);gesture=metrics();});
+canvas.addEventListener('pointermove',e=>{if(!pointers.has(e.pointerId))return;const old=pointers.get(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,button:old.button});const m=metrics();if(gesture&&m.n===gesture.n){const dx=m.x-gesture.x,dy=m.y-gesture.y;
+ if(m.n>1){if(gesture.d>0)controls.goalRadius*=gesture.d/Math.max(1,m.d);pan(dx,dy);}
+ else if(old.button===2||e.shiftKey)pan(dx,dy);
+ else{controls.goalTheta-=dx*.006;controls.goalPhi-=dy*.004;}
+ clampControls();}gesture=m;});
+function release(e){pointers.delete(e.pointerId);gesture=metrics();}
+canvas.addEventListener('pointerup',release);canvas.addEventListener('pointercancel',release);canvas.addEventListener('lostpointercapture',release);
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('wheel',e=>{e.preventDefault();controls.goalRadius*=Math.exp(Math.max(-100,Math.min(100,e.deltaY))*.0014);clampControls();},{passive:false});
+function clampControls(){controls.goalPhi=Math.max(.24,Math.min(1.49,controls.goalPhi));controls.goalRadius=Math.max(12,Math.min(58,controls.goalRadius));}
+canvas.addEventListener('keydown',e=>{
+ let handled=true;switch(e.key){case'ArrowLeft':controls.goalTheta+=.09;break;case'ArrowRight':controls.goalTheta-=.09;break;case'ArrowUp':controls.goalPhi-=.06;break;case'ArrowDown':controls.goalPhi+=.06;break;case'+':case'=':controls.goalRadius*=.9;break;case'-':controls.goalRadius*=1.1;break;case'Home':controls.goalTheta=.70;controls.goalPhi=1.05;controls.goalRadius=adaptiveRadius();controls.goalTarget.set(0,1.78,0);break;default:handled=false;}
+ if(handled){e.preventDefault();clampControls();}
+});
+canvas.addEventListener('dblclick',()=>{controls.goalTheta=.70;controls.goalPhi=1.05;controls.goalRadius=adaptiveRadius();controls.goalTarget.set(0,1.78,0);});
+window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));renderer.setSize(innerWidth,innerHeight);dustMaterial.uniforms.uPixel.value=Math.min(devicePixelRatio,1.7);});
+
+// 用固定的可见时间推进动画；后台暂停，返回页面不会突然跳时。
+let previous=performance.now(),time=0,trainCycle=-1,raf=0;
+const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
+function animate(now){
+ if(document.hidden){raf=0;return;}
+ const dt=Math.min((now-previous)/1000,.05);previous=now;time+=dt;
+ const t=time,motion=reducedMotion.matches?.23:1;
+ const damping=1-Math.exp(-dt*8);
+ controls.theta+=(controls.goalTheta-controls.theta)*damping;controls.phi+=(controls.goalPhi-controls.phi)*damping;
+ controls.radius+=(controls.goalRadius-controls.radius)*damping;controls.target.lerp(controls.goalTarget,damping);
+ camera.position.set(controls.target.x+controls.radius*Math.sin(controls.phi)*Math.sin(controls.theta),controls.target.y+controls.radius*Math.cos(controls.phi),controls.target.z+controls.radius*Math.sin(controls.phi)*Math.cos(controls.theta));camera.lookAt(controls.target);
+ waterUniforms.uTime.value=t;rayMat.uniforms.uTime.value=t;
+ for(const tr of trees){tr.crown.rotation.z=Math.sin(t*.48+tr.phase)*.017*motion;tr.crown.rotation.x=Math.sin(t*.36+tr.phase)*.012*motion;}
+ for(const n of noren){const pos=n.m.geometry.attributes.position;for(let i=0;i<pos.count;i++){const yy=n.base[i*3+1];const weight=(.315-yy)/.63;pos.setZ(i,Math.sin(t*1.35+n.phase+n.base[i*3]*5)*.05*weight*motion);}pos.needsUpdate=true;n.m.geometry.computeVertexNormals();n.g.rotation.x=Math.sin(t*.9+n.phase)*.04*motion;}
+ shirtPivot.rotation.x=Math.sin(t*.93)*.10*motion;shirtPivot.rotation.z=Math.sin(t*.72)*.035*motion;
+ const pp=page.geometry.attributes.position;for(let i=0;i<pp.count;i++){const xx=pageBase[i*3];pp.setZ(i,Math.sin(t*1.18+xx*8)*.035*(xx+.087)/.174*motion);}pp.needsUpdate=true;page.geometry.computeVertexNormals();
+ for(const b of birds)b.g.rotation.z=Math.sin(t*.62+b.phase)*.045*motion;
+ fanHead.rotation.y=Math.sin(t*.42)*.38;blades.rotation.z=t*8;
+ tail.rotation.y=Math.sin(t*.7)*Math.pow(Math.max(0,Math.sin(t*.20)),7)*.27*motion;
+ catEars[1].rotation.z=-.2+Math.pow(Math.max(0,Math.sin(t*.31)),20)*.18*motion;
+ const breathe=1+Math.sin(t*1.1)*.012;body.scale.y=.72*breathe;
+ for(const f of flicker){const startup=t<5?(Math.sin(t*13+f.phase)*.13+Math.sin(t*23)*.06):.008*Math.sin(t*1.6+f.phase);f.light.intensity=f.base*(.91+startup);}
+ const signalMix=(Math.sin(t*.24)+1)*.5;signalLights[0].material.color.setRGB(.20+.32*(1-signalMix),.46+.48*(1-signalMix),.29+.34*(1-signalMix));signalLights[1].material.color.setRGB(.38+.60*signalMix,.29+.48*signalMix,.12+.24*signalMix);
+ for(const f of fish){f.g.position.x=f.x+Math.sin(t*.33+f.phase)*.22;f.g.position.y=f.y+Math.sin(t*.47+f.phase)*.025;f.g.rotation.y=f.sideView?Math.sin(t*.33+f.phase)*.15:t*.16;}
+ for(let i=0;i<splash.length;i++){const s=splash[i],u=(t*.75+s.phase)%1;s.m.position.set(5.13+Math.sin(s.phase)*s.r*u,.21+Math.sin(u*Math.PI)*.20,5.0+Math.cos(s.phase)*s.r*u);s.m.material.opacity=Math.sin(u*Math.PI)*.65;}
+ for(let i=0;i<ripples.length;i++){const p=(t*.37+i*.25)%1;ripples[i].scale.setScalar(.5+p*2.8);ripples[i].material.opacity=(1-p)*.42;}
+ for(const f of falling){
+  if(f.water){f.m.position.z=4.38+((t*.10+f.phase)%2.20);f.m.position.x=f.x+Math.sin(t*.48+f.phase)*.065;f.m.position.y=.218+Math.sin(t*1.2+f.phase)*.009;f.m.rotation.z=t*.10+f.phase;continue;}
+  f.age+=dt*motion;if(f.age>f.life){f.age=0;const tr=choose(trees);f.t=tr;f.x=tr.x+rand(-.8,.8);f.z=tr.z+rand(-.4,.6);}
+  const fallDuration=f.life*.73,u=Math.min(f.age/fallDuration,1);
+  let x=f.x+u*1.3+Math.sin(u*7+f.phase)*.23,z=f.z+u*1.5+Math.cos(u*6+f.phase)*.24;
+  x=Math.max(-6.85,Math.min(6.85,x));z=Math.max(-6.80,Math.min(6.80,z));
+  let floor=z<-1.7?(x<-.3?1.38:1.67):z>3.5?.22:z>2?.69:.55;
+  if(x>1.0&&x<5.9&&z>-4.7&&z<-.35)floor=6.20-Math.abs(z+2.54)*.44;
+  const y=Math.max(floor,f.t.y+(1-u)*.2-(f.t.y-floor)*u);
+  f.m.position.set(x,y,z);if(u<1)f.m.rotation.set(t*.7+f.phase,t*.9+f.phase,t*.55);else f.m.rotation.set(-Math.PI/2,0,f.phase);
+ }
+ const dp=dust.geometry.attributes.position;
+ for(let i=0;i<dustCount;i++){const d=dustSeeds[i];dp.setXYZ(i,d.x+Math.sin(t*.21+d.phase)*.09,.7+((d.y-.7+t*.045)%4.1),d.z+Math.cos(t*.18+d.phase)*.06);}dp.needsUpdate=true;
+ for(const h of halos){h.quaternion.copy(camera.quaternion);const parentQuat=new Quaternion();h.parent.getWorldQuaternion(parentQuat);h.quaternion.premultiply(parentQuat.invert());}
+ for(const c of clouds)c.m.position.x=c.x+Math.sin(t*.018+c.phase)*1.2;
+ for(let i=0;i<mist.length;i++)mist[i].m.position.x=mist[i].x+Math.sin(t*.04+i)*.55;
+ const cycle=Math.floor(t/67),local=t%67;train.visible=local>40&&local<58;
+ if(train.visible){const u=(local-40)/18;train.position.x=-9+u*17;trainGlow.intensity=Math.sin(u*Math.PI)*.65;if(trainCycle!==cycle){trainCycle=cycle;distantBell();}}
+ renderer.render(scene,camera);raf=requestAnimationFrame(animate);
+}
+document.addEventListener('visibilitychange',()=>{if(document.hidden){if(raf)cancelAnimationFrame(raf);raf=0;}else{previous=performance.now();if(!raf)raf=requestAnimationFrame(animate);}});
+raf=requestAnimationFrame(animate);
+</script>
+</body>
+</html>

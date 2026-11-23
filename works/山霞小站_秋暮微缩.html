@@ -1,0 +1,1941 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>山霞小站 · 秋暮</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; overscroll-behavior: none; }
+    body { background: linear-gradient(#9694b8, #dfaeaa 52%, #efc394); }
+    canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+    canvas:active { cursor: grabbing; }
+    canvas:focus { outline: none; }
+  </style>
+</head>
+<body>
+<canvas id="diorama" tabindex="0" aria-label="山霞小站与山吹旧书店。拖动旋转，滚轮或双指缩放，右键拖动平移。键盘方向键旋转，加减键缩放，Home 回到初始视角。"></canvas>
+<script type="module">
+import * as T from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js';
+
+const canvas = document.querySelector('#diorama');
+const renderer = new T.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.outputColorSpace = T.SRGBColorSpace;
+renderer.toneMapping = T.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.12;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = T.PCFSoftShadowMap;
+renderer.autoClear = false;
+
+const TAU = Math.PI * 2;
+const v = (x, y, z) => new T.Vector3(x, y, z);
+const UP = v(0, 1, 0);
+const { clamp, lerp, smoothstep, euclideanModulo } = T.MathUtils;
+const motion = matchMedia('(prefers-reduced-motion: reduce)').matches ? .32 : 1;
+let seed = 0x81bda127;
+const rand = (a = 0, b = 1) => {
+  seed ^= seed << 13;
+  seed ^= seed >>> 17;
+  seed ^= seed << 5;
+  return a + (b - a) * (seed >>> 0) / 4294967296;
+};
+const choose = items => items[Math.floor(rand(0, items.length))];
+const time = { value: 0 };
+const scene = new T.Scene();
+const model = new T.Group();
+scene.add(model);
+const clockwork = [];
+const camera = new T.OrthographicCamera(-20, 20, 16, -16, .1, 180);
+const initialView = { yaw: .42, pitch: .57, zoom: 1, target: v(.10, 2.45, -.25) };
+const goal = { ...initialView, target: initialView.target.clone() };
+let yaw = goal.yaw, pitch = goal.pitch, zoom = goal.zoom;
+const focus = goal.target.clone();
+
+function resize() {
+  const width = Math.max(1, innerWidth), height = Math.max(1, innerHeight), aspect = width / height;
+  const halfHeight = Math.max(14.85, 17.35 / aspect);
+  camera.left = -halfHeight * aspect;
+  camera.right = halfHeight * aspect;
+  camera.top = halfHeight;
+  camera.bottom = -halfHeight;
+  camera.updateProjectionMatrix();
+  skyUniforms.aspect.value = aspect;
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 1.85, Math.sqrt(2800000 / (width * height))));
+  renderer.setSize(width, height, false);
+}
+
+function updateCamera(blend) {
+  yaw = lerp(yaw, goal.yaw, blend);
+  pitch = lerp(pitch, goal.pitch, blend);
+  zoom = lerp(zoom, goal.zoom, blend);
+  focus.lerp(goal.target, blend);
+  const horizontal = 59 * Math.cos(pitch);
+  camera.position.set(focus.x + horizontal * Math.sin(yaw), focus.y + 59 * Math.sin(pitch), focus.z + horizontal * Math.cos(yaw));
+  camera.lookAt(focus);
+  if (camera.zoom !== zoom) {
+    camera.zoom = zoom;
+    camera.updateProjectionMatrix();
+  }
+}
+
+function rotate(dx, dy) {
+  goal.yaw -= dx * .0052;
+  goal.pitch = clamp(goal.pitch + dy * .0047, .11, 1.37);
+}
+function magnify(factor) { goal.zoom = clamp(goal.zoom * factor, .60, 4.6); }
+function pan(dx, dy) {
+  const unitsPerPixel = (camera.top - camera.bottom) / Math.max(1, innerHeight) / goal.zoom;
+  camera.updateMatrixWorld();
+  goal.target.addScaledVector(v(0, 0, 0).setFromMatrixColumn(camera.matrixWorld, 0), -dx * unitsPerPixel);
+  goal.target.addScaledVector(v(0, 0, 0).setFromMatrixColumn(camera.matrixWorld, 1), dy * unitsPerPixel);
+  goal.target.clamp(v(-13, -2.5, -13), v(13, 13, 13));
+}
+const pointers = new Map();
+canvas.addEventListener('contextmenu', event => event.preventDefault());
+canvas.addEventListener('pointerdown', event => {
+  canvas.setPointerCapture(event.pointerId);
+  pointers.set(event.pointerId, { x: event.clientX, y: event.clientY, pan: event.button !== 0 || event.shiftKey });
+});
+canvas.addEventListener('pointermove', event => {
+  const previous = pointers.get(event.pointerId);
+  if (!previous) return;
+  const next = { ...previous, x: event.clientX, y: event.clientY };
+  const second = [...pointers.entries()].find(([id]) => id !== event.pointerId)?.[1];
+  if (second) {
+    const before = Math.hypot(previous.x - second.x, previous.y - second.y);
+    const after = Math.hypot(next.x - second.x, next.y - second.y);
+    if (before > 8 && after > 8) magnify(after / before);
+    pan((next.x - previous.x) * .5, (next.y - previous.y) * .5);
+  } else if (previous.pan) {
+    pan(next.x - previous.x, next.y - previous.y);
+  } else {
+    rotate(next.x - previous.x, next.y - previous.y);
+  }
+  pointers.set(event.pointerId, next);
+});
+for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+  canvas.addEventListener(event, ({ pointerId }) => pointers.delete(pointerId));
+}
+canvas.addEventListener('wheel', event => {
+  event.preventDefault();
+  const amount = event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? innerHeight : 1);
+  magnify(Math.exp(-clamp(amount, -220, 220) * .0013));
+}, { passive: false });
+canvas.addEventListener('keydown', event => {
+  const keys = {
+    ArrowLeft: () => rotate(28, 0), ArrowRight: () => rotate(-28, 0),
+    ArrowUp: () => rotate(0, 26), ArrowDown: () => rotate(0, -26),
+    '+': () => magnify(1.15), '=': () => magnify(1.15), '-': () => magnify(1 / 1.15),
+    Home: () => {
+      goal.yaw = yaw + Math.atan2(Math.sin(initialView.yaw - yaw), Math.cos(initialView.yaw - yaw));
+      goal.pitch = initialView.pitch;
+      goal.zoom = initialView.zoom;
+      goal.target.copy(initialView.target);
+    }
+  };
+  if (Object.hasOwn(keys, event.key)) {
+    event.preventDefault();
+    keys[event.key]();
+  }
+});
+
+const sky = new T.Scene(), screenCamera = new T.Camera();
+const skyUniforms = { time, aspect: { value: 1 } };
+const skyMaterial = new T.ShaderMaterial({
+  uniforms: skyUniforms, depthTest: false, depthWrite: false, toneMapped: false,
+  vertexShader: `varying vec2 uvScreen;
+    void main() { uvScreen = uv; gl_Position = vec4(position.xy, 0., 1.); }`,
+  fragmentShader: `
+    varying vec2 uvScreen;
+    uniform float time, aspect;
+    float hash(vec2 p) { return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453); }
+    float noise(vec2 p) {
+      vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f);
+      return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+1.),f.x),f.y);
+    }
+    float fbm(vec2 p) {
+      return noise(p)*.58 + noise(p*2.07+5.)*.27 + noise(p*4.19+13.)*.11 + noise(p*8.03)*.04;
+    }
+    void main() {
+      vec2 p=uvScreen;
+      vec3 amber=vec3(.987,.783,.589), peach=vec3(.932,.694,.673), violet=vec3(.572,.605,.758);
+      vec3 col=mix(amber,peach,smoothstep(.04,.68,p.y));
+      col=mix(col,violet,smoothstep(.39,1.08,p.y));
+      vec2 fromSun=(p-vec2(.153,.697))*vec2(aspect,1.);
+      float sunDist=length(fromSun);
+      col=mix(col,vec3(1.,.823,.58),.41*exp(-sunDist*sunDist*9.));
+      col=mix(col,vec3(1.,.894,.675),.82*(1.-smoothstep(.026,.029,sunDist)));
+      vec2 cloud=vec2(p.x*aspect*2.5+time*.0017,p.y*25.+p.x*1.7);
+      float n=fbm(cloud+vec2(noise(cloud*.3)*.7,noise(cloud*.64+2.)*.47));
+      float belt=smoothstep(.36,.51,p.y)*(1.-smoothstep(.84,1.,p.y));
+      float body=smoothstep(.53,.64,n)*belt;
+      float lining=(smoothstep(.495,.54,n)-smoothstep(.55,.64,n))*belt;
+      col=mix(col,vec3(.790,.634,.679),body*.38);
+      col=mix(col,vec3(1.,.822,.66),lining*.50);
+      float streak=smoothstep(.61,.78,fbm(vec2(p.x*aspect*3.6-time*.001,p.y*43.)));
+      col=mix(col,vec3(1.,.883,.74),streak*smoothstep(.26,.37,p.y)*(1.-smoothstep(.47,.71,p.y))*.42);
+      float farRidge=.293+fbm(vec2(p.x*aspect*2.8,4.3))*.114;
+      float nearRidge=.234+fbm(vec2(p.x*aspect*3.6,8.1))*.112;
+      float hills=(1.-smoothstep(farRidge-.003,farRidge+.004,p.y))*smoothstep(.12,.38,p.y);
+      float nearer=(1.-smoothstep(nearRidge-.003,nearRidge+.003,p.y))*smoothstep(.14,.37,p.y);
+      col=mix(col,vec3(.688,.595,.697),hills*.41);
+      col=mix(col,vec3(.584,.517,.656),nearer*.23);
+      col=mix(col,vec3(1.,.815,.656),exp(-pow((p.y-.25-fbm(vec2(p.x*3.+time*.007,9.5))*.052)*26.,2.))*.09);
+      float grain=(hash(mod(gl_FragCoord.xy,vec2(937.,961.)))-.5)*.017;
+      col*=1.-.13*pow(length((p-.5)*vec2(.86,.62)),1.7);
+      gl_FragColor=vec4(col+grain,1.);
+    }`
+});
+const backdrop = new T.Mesh(new T.PlaneGeometry(2, 2), skyMaterial);
+backdrop.frustumCulled = false;
+sky.add(backdrop);
+
+const hemisphere = new T.HemisphereLight('#aabce8', '#8b554d', 1.85);
+const sun = new T.DirectionalLight('#ffcc8c', 3.05);
+sun.position.set(-28, 19, 22);
+sun.target.position.set(0, 1, -1);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -19, right: 19, top: 19, bottom: -19, near: .8, far: 85 });
+sun.shadow.bias = -.00018;
+sun.shadow.normalBias = .03;
+const skyFill = new T.DirectionalLight('#9cacf0', .66);
+skyFill.position.set(14, 13, -16);
+scene.add(hemisphere, sun, sun.target, skyFill);
+
+const ramp = new T.DataTexture(new Uint8Array([79, 124, 174, 220, 255]), 5, 1, T.RedFormat);
+ramp.minFilter = ramp.magFilter = T.NearestFilter;
+ramp.generateMipmaps = false;
+ramp.needsUpdate = true;
+const paintCache = new Map();
+function paint(color) {
+  if (!paintCache.has(color)) paintCache.set(color, new T.MeshToonMaterial({ color, gradientMap: ramp }));
+  return paintCache.get(color);
+}
+const stone = ['#6e7180', '#83838a', '#98928d', '#a69b8a', '#767d84'].map(paint);
+const earth = ['#493d49', '#56434d', '#644b4e', '#795552', '#90705b'].map(paint);
+const timber = ['#584047', '#6c483d', '#815341', '#91664c', '#a77854'].map(paint);
+const moss = ['#53675b', '#6e8164', '#86916b', '#8f9061'].map(paint);
+const paper = paint('#dfc69e'), pale = paint('#eadaae'), soot = paint('#362f3e');
+const tileDark = paint('#344452'), plaster = paint('#d0ae86'), mint = paint('#8bac96');
+const jade = paint('#597c74'), rust = paint('#8c5443'), steel = paint('#a6a1aa');
+const crimson = paint('#b84037'), terracotta = paint('#af6047'), gold = paint('#baa067');
+const ink = new T.LineBasicMaterial({ color: '#382d42', opacity: .61, transparent: true, depthWrite: false });
+const litPaper = new T.MeshStandardMaterial({ color: '#ffe0a3', emissive: '#ffb05b', emissiveIntensity: .68, roughness: .65 });
+const gleam = new T.MeshStandardMaterial({ color: '#b7b1ac', roughness: .31, metalness: .33 });
+const geo = {
+  box: new T.BoxGeometry(1, 1, 1), cyl: new T.CylinderGeometry(1, 1, 1, 12),
+  ball: new T.SphereGeometry(1, 14, 9), gem: new T.IcosahedronGeometry(1, 0),
+  rock: new T.IcosahedronGeometry(1, 1), plane: new T.PlaneGeometry(1, 1)
+};
+const fixed = new Map(), outlines = [], forms = new Map();
+const scratch = new T.Object3D();
+function collections(g, m, casts, receives) {
+  const key = `${g.id}/${m.id}/${casts}/${receives}`;
+  if (!fixed.has(key)) fixed.set(key, { g, m, casts, receives, transforms: [] });
+  return fixed.get(key).transforms;
+}
+function matrix(x, y, z, sx, sy, sz, rx = 0, ry = 0, rz = 0) {
+  scratch.position.set(x, y, z);
+  scratch.scale.set(sx, sy, sz);
+  scratch.rotation.set(rx, ry, rz);
+  scratch.updateMatrix();
+  return scratch.matrix.clone();
+}
+function place(g, m, x, y, z, sx = 1, sy = 1, sz = 1, rx = 0, ry = 0, rz = 0, casts = true) {
+  const transform = matrix(x, y, z, sx, sy, sz, rx, ry, rz);
+  collections(g, m, casts, true).push(transform);
+  return transform;
+}
+const boxEdgePositions = new T.EdgesGeometry(geo.box).getAttribute('position');
+function cube(x, y, z, w, h, d, mat, options = {}) {
+  const { rx = 0, ry = 0, rz = 0, edge = false, shadow = true } = options;
+  const transform = place(geo.box, mat, x, y, z, w, h, d, rx, ry, rz, shadow);
+  if (edge) {
+    const p = v(0, 0, 0);
+    for (let i = 0; i < boxEdgePositions.count; i++) {
+      p.fromBufferAttribute(boxEdgePositions, i).applyMatrix4(transform);
+      outlines.push(p.x, p.y, p.z);
+    }
+  }
+}
+const orb = (x, y, z, sx, sy, sz, mat, rough = false, shadow = true) => place(rough ? geo.rock : geo.ball, mat, x, y, z, sx, sy, sz, 0, 0, 0, shadow);
+const disk = (x, y, z, r, h, mat, rx = 0, rz = 0) => place(geo.cyl, mat, x, y, z, r, h, r, rx, 0, rz);
+function taperGeometry(topRatio, sides) {
+  const key = `cone/${topRatio}/${sides}`;
+  if (!forms.has(key)) forms.set(key, new T.CylinderGeometry(topRatio, 1, 1, sides));
+  return forms.get(key);
+}
+const taper = (x, y, z, r, topRatio, h, mat, sides = 12, rx = 0, ry = 0, rz = 0) => place(taperGeometry(topRatio, sides), mat, x, y, z, r, h, r, rx, ry, rz);
+function ringGeometry(r, thickness, segments) {
+  const key = `ring/${r}/${thickness}/${segments}`;
+  if (!forms.has(key)) forms.set(key, new T.TorusGeometry(r, thickness, 6, segments));
+  return forms.get(key);
+}
+const ring = (x, y, z, r, thickness, mat, rx = 0, ry = 0, segments = 24) => place(ringGeometry(r, thickness, segments), mat, x, y, z, 1, 1, 1, rx, ry);
+function stick(a, b, radius, mat, width = 0) {
+  const start = v(...a), end = v(...b), direction = end.clone().sub(start);
+  scratch.position.copy(start).lerp(end, .5);
+  scratch.scale.set(radius, direction.length(), width || radius);
+  scratch.quaternion.setFromUnitVectors(UP, direction.normalize());
+  scratch.updateMatrix();
+  collections(width ? geo.box : geo.cyl, mat, true, true).push(scratch.matrix.clone());
+}
+function direct(g, m, x = 0, y = 0, z = 0, parent = model, cast = true) {
+  const node = new T.Mesh(g, m);
+  node.position.set(x, y, z);
+  node.castShadow = cast;
+  node.receiveShadow = true;
+  parent.add(node);
+  return node;
+}
+function group(x, y, z, parent = model) {
+  const g = new T.Group();
+  g.position.set(x, y, z);
+  parent.add(g);
+  return g;
+}
+function shaped(points) { return new T.ShapeGeometry(new T.Shape(points.map(([x, y]) => new T.Vector2(x, y)))); }
+function tube(points, radius, mat, parent = model, cast = true, segments = 18) {
+  const path = new T.CatmullRomCurve3(points.map(p => v(...p)));
+  return direct(new T.TubeGeometry(path, segments, radius, 5, false), mat, 0, 0, 0, parent, cast);
+}
+function texture(width, height, draw) {
+  const source = document.createElement('canvas');
+  source.width = width;
+  source.height = height;
+  draw(source.getContext('2d'), width, height);
+  const tex = new T.CanvasTexture(source);
+  tex.colorSpace = T.SRGBColorSpace;
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return tex;
+}
+function graphic(map, w, h, x, y, z, { ry = 0, rx = 0, emissive = 0, parent = model } = {}) {
+  const material = new T.MeshStandardMaterial({ map, roughness: .88, side: T.DoubleSide });
+  if (emissive) {
+    material.emissive.set('#ffc37e');
+    material.emissiveMap = map;
+    material.emissiveIntensity = emissive;
+  }
+  const node = direct(geo.plane, material, x, y, z, parent, false);
+  node.scale.set(w, h, 1);
+  node.rotation.set(rx, ry, 0);
+  return node;
+}
+function sign(title, subtitle, w, h, x, y, z, opts = {}) {
+  const { bg = '#ebd8ab', fg = '#503c3d', vertical = false, border = true } = opts;
+  const tex = texture(vertical ? 180 : 768, vertical ? 640 : 256, (ctx, tw, th) => {
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, tw, th);
+    for (let i = 0; i < 220; i++) {
+      ctx.fillStyle = i % 3 ? 'rgba(91,55,40,.075)' : 'rgba(255,236,186,.14)';
+      ctx.fillRect(rand(0, tw), rand(0, th), rand(1, 11), rand(1, 4));
+    }
+    if (border) {
+      ctx.strokeStyle = fg;
+      ctx.globalAlpha = .48;
+      ctx.lineWidth = 3;
+      ctx.strokeRect(11, 11, tw - 22, th - 22);
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = fg;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const font = '"Yu Mincho", "MS Mincho", SimSun, serif';
+    if (vertical) {
+      const chars = [...title];
+      ctx.font = `bold ${Math.min(tw * .65, th / (chars.length + .45))}px ${font}`;
+      chars.forEach((char, i) => ctx.fillText(char, tw / 2, th * (i + .72) / (chars.length + .44)));
+    } else {
+      ctx.font = `bold ${subtitle ? 105 : 136}px ${font}`;
+      ctx.fillText(title, tw / 2, th * (subtitle ? .42 : .51), tw * .9);
+      if (subtitle) {
+        ctx.font = '600 34px "Yu Gothic", "Microsoft YaHei", sans-serif';
+        ctx.fillText(subtitle, tw / 2, th * .78, tw * .88);
+      }
+    }
+  });
+  return graphic(tex, w, h, x, y, z, opts);
+}
+const radianceMap = texture(128, 128, (ctx, w, h) => {
+  const halo = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+  halo.addColorStop(0, 'rgba(255,231,176,.92)');
+  halo.addColorStop(.2, 'rgba(255,190,98,.36)');
+  halo.addColorStop(.56, 'rgba(255,161,68,.10)');
+  halo.addColorStop(1, 'rgba(255,158,59,0)');
+  ctx.fillStyle = halo;
+  ctx.fillRect(0, 0, w, h);
+});
+function halo(x, y, z, size, opacity = .65, color = '#ffd99d', parent = model) {
+  const m = new T.SpriteMaterial({ map: radianceMap, color, transparent: true, depthWrite: false,
+    blending: T.AdditiveBlending, opacity, toneMapped: false });
+  const sprite = new T.Sprite(m);
+  sprite.position.set(x, y, z);
+  sprite.scale.setScalar(size);
+  parent.add(sprite);
+  return sprite;
+}
+const lamps = [];
+function practical(x, y, z, lightSize, power, reach) {
+  const light = new T.PointLight('#ffbf73', power, reach);
+  light.position.set(x, y, z);
+  model.add(light);
+  const aura = halo(x, y, z, lightSize, .62);
+  lamps.push({ light, aura, power, phase: rand(0, 8) });
+}
+
+// 每批共用几何和材质，场景中的活动零件仍使用自己的枢轴。
+function assembleInstances() {
+  for (const { g, m, casts, receives, transforms } of fixed.values()) {
+    const batch = new T.InstancedMesh(g, m, transforms.length);
+    transforms.forEach((transform, i) => batch.setMatrixAt(i, transform));
+    batch.instanceMatrix.needsUpdate = true;
+    batch.castShadow = casts;
+    batch.receiveShadow = receives;
+    batch.computeBoundingSphere();
+    model.add(batch);
+  }
+  fixed.clear();
+  const edges = new T.BufferGeometry();
+  edges.setAttribute('position', new T.Float32BufferAttribute(outlines, 3));
+  model.add(new T.LineSegments(edges, ink));
+}
+
+// 方形地台的底板完整，右前角露出溪流的两个切面。
+const W = 12, bankX = 8.40, sourceZ = 4.40;
+const railZ = x => 7.75 + .69 * Math.sin((x + 3.5) * .133);
+const grade = z => .98 + (4.45 - z) * .267;
+const stairX = z => -1.60 - 4.18 * smoothstep(-z, 2.4, 9.9);
+function terrainY(x, z) {
+  const hill = Math.max(0, -z - 4.6) * .43 + Math.max(0, -z - 10.2) * .16;
+  const face = 1 - smoothstep(z, 3.02, 3.44);
+  let y = .12 + (2.20 + hill) * face;
+  y += (.18 * Math.sin(x * .47 + z * .31) + .13 * Math.cos(z * .89)) * smoothstep(-z, 4.7, 8.0);
+  if (x < -3.13 && z < 3.3) y -= .49 * smoothstep(-x, 3.13, 6.5) * (1 - smoothstep(-z, .7, 6.2));
+  if (x > -.18 && x < 8.17 && z >= -4.55 && z <= 3.05) y = 2.29;
+  const corridor = 1 - smoothstep(Math.abs(x - stairX(z)), 1.02, 1.83);
+  if (z >= -10.7 && z <= 4.72) y = lerp(y, Math.max(.12, grade(z) - .18), corridor);
+  return y;
+}
+const barkDark = paint('#604547');
+const slab = paint('#5b414a');
+cube(0, -3.15, 0, 24.3, .23, 24.3, soot, { edge: true });
+cube(0, -2.99, 0, 24.12, .09, 24.12, paint('#ac8060'));
+cube((-W + bankX) / 2, -1.45, 0, W + bankX, 3.03, 24, slab);
+cube((bankX + W) / 2, -1.45, (-W + sourceZ) / 2, W - bankX, 3.03, W + sourceZ, slab);
+cube((bankX + W) / 2, -2.50, (sourceZ + W) / 2, W - bankX, .97, W - sourceZ, earth[2]);
+
+const floorShadow = texture(256, 256, (ctx, w, h) => {
+  const g = ctx.createRadialGradient(w * .5, h * .5, w * .17, w * .5, h * .5, w * .5);
+  g.addColorStop(0, 'rgba(62,41,61,.74)');
+  g.addColorStop(.55, 'rgba(76,49,65,.40)');
+  g.addColorStop(1, 'rgba(76,49,65,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+});
+const plinthShadow = direct(geo.plane, new T.MeshBasicMaterial({ map: floorShadow, transparent: true, depthWrite: false }), .7, -3.30, .9, scene, false);
+plinthShadow.scale.set(41, 35, 1);
+plinthShadow.rotation.x = -Math.PI / 2;
+plinthShadow.renderOrder = -1;
+
+function coloredSurface(vertices, colors, parent = model) {
+  const g = new T.BufferGeometry();
+  g.setAttribute('position', new T.Float32BufferAttribute(vertices, 3));
+  g.setAttribute('color', new T.Float32BufferAttribute(colors, 3));
+  g.computeVertexNormals();
+  return direct(g, new T.MeshToonMaterial({ vertexColors: true, gradientMap: ramp, side: T.DoubleSide }), 0, 0, 0, parent, false);
+}
+const terrainPalette = ['#9a926a', '#a29a73', '#9c896b', '#9a966e', '#9e8c68', '#a69574'].map(c => new T.Color(c));
+const groundVertices = [], groundColors = [];
+function faceColors(vertices, colorData, color, ...positions) {
+  for (const p of positions) {
+    vertices.push(...p);
+    colorData.push(color.r, color.g, color.b);
+  }
+}
+for (let r = 0; r < 60; r++) {
+  for (let c = 0; c < 60; c++) {
+    const x = -W + c * .4, z = -W + r * .4;
+    if (c >= 51 && r >= 41) continue;
+    const a = [x, terrainY(x, z), z], b = [x + .4, terrainY(x + .4, z), z];
+    const d = [x, terrainY(x, z + .4), z + .4], e = [x + .4, terrainY(x + .4, z + .4), z + .4];
+    const color = choose(terrainPalette);
+    faceColors(groundVertices, groundColors, color, a, d, b, b, d, e);
+  }
+}
+coloredSurface(groundVertices, groundColors).castShadow = true;
+
+const sectionRock = ['#443644', '#513f4d', '#67464c', '#765353', '#896256', '#574454'].map(c => new T.Color(c));
+const sectionVertices = [], sectionColors = [];
+function crossSection(start, end, outward, top, bottom, step, layers) {
+  const [x0, z0] = start, [x1, z1] = end;
+  const columns = Math.ceil(Math.hypot(x1 - x0, z1 - z0) / step);
+  const grid = [];
+  for (let row = 0; row <= layers; row++) {
+    const list = [];
+    for (let col = 0; col <= columns; col++) {
+      const t = (col + (col > 0 && col < columns ? rand(-.34, .34) : 0)) / columns;
+      const x = lerp(x0, x1, t), z = lerp(z0, z1, t);
+      const y = lerp(bottom, top(x, z), row / layers) + (row && row < layers ? rand(-.15, .15) : 0);
+      const offset = rand(.018, .081);
+      list.push([x + outward[0] * offset, y, z + outward[1] * offset]);
+    }
+    grid.push(list);
+  }
+  for (let row = 0; row < layers; row++) {
+    for (let col = 0; col < columns; col++) {
+      const a = grid[row][col], b = grid[row][col + 1], c = grid[row + 1][col], d = grid[row + 1][col + 1];
+      const center = [(a[0] + d[0]) / 2 + outward[0] * rand(0, .09), (a[1] + d[1]) / 2 + rand(-.09, .09),
+        (a[2] + d[2]) / 2 + outward[1] * rand(0, .09)];
+      const color = choose(sectionRock).clone();
+      for (const [p, q] of [[a, b], [b, d], [d, c], [c, a]]) {
+        faceColors(sectionVertices, sectionColors, color.clone().multiplyScalar(rand(.83, 1.19)), p, q, center);
+      }
+    }
+  }
+}
+crossSection([-W, W], [bankX, W], [0, 1], terrainY, -2.93, 1.05, 5);
+crossSection([-W, -W], [-W, W], [-1, 0], terrainY, -2.93, .95, 9);
+crossSection([W, -W], [-W, -W], [0, -1], terrainY, -2.93, 1.0, 9);
+crossSection([W, sourceZ], [W, -W], [1, 0], terrainY, -2.93, 1.02, 9);
+crossSection([bankX, W], [W, W], [0, 1], () => -1.99, -2.93, .85, 2);
+crossSection([W, W], [W, sourceZ], [1, 0], () => -1.99, -2.93, .85, 2);
+coloredSurface(sectionVertices, sectionColors);
+
+for (let i = 0; i < 208; i++) {
+  const x = rand(-11.95, 8.32), y = rand(-.24, .10), s = rand(.028, .094);
+  place(geo.gem, choose(stone), x, y, 12.05, s, s * .58, s * .62, 0, rand(0, TAU), 0, false);
+  if (i % 9 === 0) cube(x, -1.45 + Math.sin(x * .31) * .12, 12.095, rand(.12, .49), .023, .014, earth[4], { rz: rand(-.13, .13), shadow: false });
+}
+for (const [x, y] of [[-7.7, -1.13], [3.15, -1.95], [6.7, -.82]]) {
+  disk(x, y, 12.105, .22, .16, rust, Math.PI / 2);
+  disk(x, y, 12.199, .151, .032, soot, Math.PI / 2);
+  ring(x, y, 12.239, .191, .056, rust);
+  for (let i = 0; i < 6; i++) {
+    const a = i * TAU / 6;
+    orb(x + Math.cos(a) * .2, y + Math.sin(a) * .2, 12.271, .015, .015, .014, gold);
+  }
+  for (let i = 0; i < 4; i++) cube(x + rand(-.23, .23), y - .37, 12.105, rand(.025, .076), rand(.16, .39), .018, earth[3], { rz: rand(-.15, .15), shadow: false });
+}
+for (let i = 0; i < 10; i++) {
+  const x = -10.35 + rand(-.7, .65), lean = rand(-1.36, 1.22);
+  tube([[x, .11, 12.05], [x + lean * .2, -.35, 12.16], [x + lean * .59, -.82, 12.17],
+    [x + lean * .69, -1.34, 12.18], [x + lean, rand(-2.43, -1.52), 12.10]], rand(.017, .053), barkDark, model, true, 15);
+}
+
+function stoneWall(x0, x1, z, from, height) {
+  cube((x0 + x1) / 2, from + height / 2, z, x1 - x0, height, .26, soot);
+  for (let row = 0; row * .32 < height; row++) {
+    let left = x0 - (row % 2) * .37;
+    while (left < x1) {
+      const right = left + rand(.55, .96), a = Math.max(x0, left), b = Math.min(x1, right);
+      if (b - a > .06) {
+        const y = from + Math.min(row * .32 + .16, height - .13);
+        cube((a + b) / 2, y, z + .06, b - a - .034, .278, rand(.26, .34), choose(stone), { rz: rand(-.036, .036) });
+        if (rand() < .32) orb((a + b) / 2 + rand(-.16, .16), y + .13, z + .227, rand(.10, .22), .042, .028, choose(moss), true, false);
+      }
+      left = right;
+    }
+  }
+  cube((x0 + x1) / 2, from + height + .012, z + .01, x1 - x0 + .05, .13, .43, stone[3], { edge: true });
+}
+stoneWall(-11.84, -3.03, 3.14, .77, .86);
+stoneWall(-.17, 8.21, 3.15, .13, 2.17);
+for (let row = 0; row < 7; row++) {
+  for (let z = sourceZ + .21 + (row % 2) * .22; z < 12; z += .48) {
+    const width = Math.min(.449, (12 - z) * 2);
+    cube(bankX + .015, -1.90 + row * .295, z, rand(.21, .32), .266, width, choose(stone), { rx: rand(-.036, .036) });
+    if (rand() < .21) orb(bankX + .18, -1.79 + row * .295, z, .036, .045, rand(.07, .14), choose(moss), true, false);
+  }
+}
+
+const maples = new T.Shape();
+const maplePoints = [[0, .61], [.13, .31], [.39, .43], [.30, .18], [.58, .23], [.36, -.03], [.48, -.26],
+  [.18, -.19], [.13, -.40], [0, -.27], [-.13, -.40], [-.18, -.19], [-.48, -.26], [-.36, -.03], [-.58, .23], [-.30, .18], [-.39, .43], [-.13, .31]];
+maplePoints.forEach(([x, y], i) => i ? maples.lineTo(x, y) : maples.moveTo(x, y));
+maples.closePath();
+const fans = new T.Shape();
+fans.moveTo(.018, -.53);
+for (let i = 0; i <= 18; i++) {
+  const a = .13 + i * (Math.PI - .26) / 18, r = .58 - (i % 3 === 1 ? .026 : 0);
+  fans.lineTo(Math.cos(a) * r, Math.sin(a) * r - .14);
+}
+fans.closePath();
+const leafGeo = [new T.ShapeGeometry(maples), new T.ShapeGeometry(fans)];
+const leafTints = ['#a83a34', '#ca4d36', '#df653a', '#eb8146', '#eab753', '#f0c75f', '#d7a859', '#885050'];
+const leaves = leafTints.map(color => new T.MeshToonMaterial({ color, gradientMap: ramp, side: T.DoubleSide, emissive: color, emissiveIntensity: .073 }));
+
+// 水面和切面共用流速，离散色带在交错波纹中位移。
+const waterSurfaceMaterial = new T.ShaderMaterial({
+  uniforms: { time }, transparent: true, depthWrite: false, side: T.DoubleSide, toneMapped: false,
+  vertexShader: `varying vec2 patch;
+    uniform float time;
+    void main() {
+      patch=uv; vec3 p=position;
+      p.z+=sin(uv.y*27.+time*1.18)*.022+sin(uv.x*29.+uv.y*10.-time*.8)*.012;
+      gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);
+    }`,
+  fragmentShader: `varying vec2 patch;
+    uniform float time;
+    float hash(vec2 p) { return fract(sin(dot(p,vec2(39.37,119.33)))*43758.5453); }
+    void main() {
+      vec2 uv=patch;
+      float flow=uv.y*23.+time*.57;
+      float x=uv.x*5.7+sin(flow*.49+time*.31)*.28+sin(flow*1.48)*.18;
+      vec2 id=floor(vec2(x+floor(flow)*.32,flow));
+      vec2 f=fract(vec2(x+floor(flow)*.32,flow));
+      float n=hash(id), cut=step(.27+.5*f.x+.12*sin(id.y+time*.65),f.y);
+      vec3 teal=vec3(.347,.502,.483), amber=vec3(.83,.552,.311);
+      vec3 color=mix(teal,amber,.20+step(.47,n)*.60);
+      color=mix(color,vec3(.342,.372,.530),step(.79,n)*.84);
+      color=mix(color,vec3(.744,.369,.349),step(.935,n)*.79);
+      color*=.91+cut*.15;
+      float stroke=step(.976,sin(flow*2.92+x*2.+sin(x*4.)*.64));
+      color=mix(color,vec3(1.,.800,.466),stroke*step(.61,n)*(.48+.30*sin(time*1.55+id.x)));
+      float rim=1.-smoothstep(.005,.037,min(min(uv.x,1.-uv.x),min(uv.y,1.-uv.y)));
+      color=mix(color,vec3(.86,.65,.39),rim*.59);
+      gl_FragColor=vec4(color,.57+stroke*.12+rim*.16);
+    }`
+});
+const waterX = (bankX + W) / 2 + .055, waterZ = (sourceZ + W) / 2;
+const water = direct(new T.PlaneGeometry(W - bankX - .09, W - sourceZ - .02, 34, 36), waterSurfaceMaterial, waterX, .055, waterZ, model, false);
+water.rotation.x = -Math.PI / 2;
+water.renderOrder = 4;
+const cutWater = new T.ShaderMaterial({
+  uniforms: { time }, transparent: true, depthWrite: false, side: T.DoubleSide, toneMapped: false,
+  vertexShader: `varying vec2 cutUv; void main(){cutUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+  fragmentShader: `varying vec2 cutUv;uniform float time;
+    void main() {
+      float ray=sin(cutUv.x*34.+cutUv.y*3.+time*.73)*.5+.5;
+      vec3 color=mix(vec3(.54,.365,.21),vec3(.81,.64,.387),cutUv.y*.66+ray*.20);
+      float rim=smoothstep(.956,.987,cutUv.y);
+      gl_FragColor=vec4(mix(color,vec3(.939,.743,.47),rim),.14+.055*(1.-cutUv.y)+rim*.49);
+    }`
+});
+for (const [x, z, width, angle] of [[waterX, 12.009, 3.51, 0], [12.009, waterZ, 7.57, Math.PI / 2]]) {
+  const wall = direct(new T.PlaneGeometry(width, 2.04), cutWater, x, -.965, z, model, false);
+  wall.rotation.y = angle;
+  wall.renderOrder = 3;
+}
+const pebble = ['#a3937e', '#b7a58a', '#85837c', '#6d767d', '#c0a481', '#9b8d83'].map(paint);
+for (let i = 0; i < 242; i++) {
+  const x = rand(8.58, 11.93), z = rand(4.54, 11.94), s = rand(.065, .21);
+  place(geo.rock, choose(pebble), x, -1.986 + rand(0, .035), z, s, s * rand(.35, .61), s * rand(.76, 1.27), 0, rand(0, TAU), 0, false);
+  if (i % 10 === 0) place(leafGeo[0], choose(leaves.slice(0, 4)), x, -1.83, z, .20, .20, .20, -Math.PI / 2, 0, rand(0, TAU), false);
+}
+for (let i = 0; i < 14; i++) {
+  const x = rand(8.6, 11.77), z = rand(4.44, 5.08), s = rand(.19, .61);
+  orb(x, rand(.05, .50), z, s, s * .69, s * .82, choose(stone), true);
+  if (i % 3 === 0) orb(x, .59, z, s * .73, s * .24, s * .73, choose(moss), true);
+}
+const spill = direct(new T.PlaneGeometry(.44, .91, 7, 9), waterSurfaceMaterial, 10.48, .50, 4.66, model, false);
+spill.rotation.x = -.17;
+spill.renderOrder = 4;
+const splashMesh = new T.InstancedMesh(geo.ball, new T.MeshBasicMaterial({ color: '#f8dca6' }), 32);
+splashMesh.frustumCulled = false;
+splashMesh.instanceMatrix.setUsage(T.DynamicDrawUsage);
+model.add(splashMesh);
+const splashScales = Array.from({ length: 32 }, (_, i) => ({ t: rand(), x: rand(-.6, .58), z: rand(.14, .86), h: rand(.16, .55), size: rand(.012, .028), ring: i > 22 }));
+clockwork.push(t => {
+  splashScales.forEach((p, i) => {
+    const q = (p.t + t * .6) % 1, arc = Math.sin(q * Math.PI);
+    scratch.position.set(10.48 + q * p.x, .10 + arc * p.h, 4.67 + q * p.z);
+    scratch.rotation.set(q * 3, 0, -p.x);
+    scratch.scale.set(p.size * arc, p.size * arc * (p.ring ? 1 : 2.5), p.size * arc);
+    scratch.updateMatrix();
+    splashMesh.setMatrixAt(i, scratch.matrix);
+  });
+  splashMesh.instanceMatrix.needsUpdate = true;
+});
+for (let i = 0; i < 3; i++) ring(10.49, .11, 5.05 + .15 * i, .13 + i * .125, .008, pale, -Math.PI / 2);
+const fishPalette = [paint('#af8665'), paint('#777e83'), paint('#d1aa79'), paint('#a77563')];
+const fin = shaped([[.01, 0], [-.23, .12], [-.22, -.11]]);
+for (let i = 0; i < 6; i++) {
+  const fish = group(10.3, -1, 9), tail = group(-.17, 0, 0, fish);
+  const tone = fishPalette[i % fishPalette.length];
+  const body = direct(geo.ball, tone, 0, 0, 0, fish, false);
+  body.scale.set(.22, .065, .080);
+  const fins = direct(fin, new T.MeshToonMaterial({ color: tone.color, gradientMap: ramp, side: T.DoubleSide }), 0, 0, 0, tail, false);
+  fins.rotation.y = .15;
+  for (const sign of [-1, 1]) direct(geo.ball, soot, .137, .021, sign * .061, fish, false).scale.set(.012, .011, .007);
+  const offset = i * TAU / 6, y = rand(-1.54, -.51), speed = rand(.09, .19);
+  clockwork.push(t => {
+    const a = t * speed + offset, b = a * 1.07 + offset;
+    fish.position.set(10.24 + Math.sin(a) * 1.16, y + Math.sin(a * 2.15) * .09, 8.83 + Math.cos(b) * 2.85);
+    fish.rotation.y = Math.atan2(Math.sin(b) * 2.85 * 1.07, Math.cos(a) * 1.16);
+    tail.rotation.y = Math.sin(t * 6.2 + offset) * .45;
+  });
+}
+for (let i = 0; i < 16; i++) {
+  const yellow = i % 4 === 0;
+  const leaf = direct(leafGeo[+yellow], leaves[yellow ? 5 : (i % 3)], rand(8.84, 11.7), .103, rand(4.58, 11.88), model, false);
+  const x = leaf.position.x, offset = leaf.position.z - 4.51, phase = rand(0, TAU), speed = rand(.085, .22);
+  leaf.scale.setScalar(rand(.11, .23));
+  clockwork.push(t => {
+    const z = euclideanModulo(offset + t * speed, 7.34);
+    leaf.position.set(x + Math.sin(t * .59 + phase) * .105, .101 + Math.sin(z * 4 + t) * .017, 4.51 + z);
+    leaf.rotation.set(-Math.PI / 2, Math.sin(t + phase) * .14, phase + Math.sin(t * .40) * .54);
+  });
+}
+
+// 弯轨用连续截面扫掠，桥段把水渠的横断面完整露出。
+function trackRibbon(start, end, profile, mat) {
+  const p = [], indices = [], count = Math.ceil((end - start) * 7);
+  for (let i = 0; i <= count; i++) {
+    const x = lerp(start, end, i / count);
+    for (const [z, y] of profile) p.push(x, y, railZ(x) + z);
+  }
+  const stride = profile.length;
+  for (let i = 0; i < count; i++) {
+    for (let j = 0; j < stride - 1; j++) {
+      const a = i * stride + j, b = a + stride;
+      indices.push(a, a + 1, b, a + 1, b + 1, b);
+    }
+  }
+  const g = new T.BufferGeometry();
+  g.setAttribute('position', new T.Float32BufferAttribute(p, 3));
+  g.setIndex(indices);
+  g.computeVertexNormals();
+  return direct(g, mat);
+}
+trackRibbon(-11.96, bankX, [[-1.56, .11], [-1.37, .24], [1.37, .24], [1.56, .11]], stone[0]);
+const railProfile = [[-.105, .423], [-.094, .46], [-.038, .477], [-.038, .55], [-.076, .566], [-.077, .594],
+  [.077, .594], [.076, .566], [.038, .55], [.038, .477], [.094, .46], [.105, .423]];
+for (const sign of [-1, 1]) {
+  const offset = sign * .635;
+  trackRibbon(-11.96, 11.97, railProfile.map(([z, y]) => [z + offset, y]), rust);
+  trackRibbon(-11.96, 11.97, [[offset - .077, .595], [offset + .077, .595]], gleam);
+}
+for (let x = -11.72; x <= 11.83; x += .535) {
+  const z = railZ(x), turn = -Math.atan(.69 * .133 * Math.cos((x + 3.5) * .133));
+  cube(x, .348, z, .230, .15, 2.37, choose(timber), { ry: turn });
+  if (x < 8.4) for (const shift of [-.87, .88]) cube(x, .425, z + shift, .124, .008, .16, timber[3], { ry: turn, shadow: false });
+  for (const dz of [-.635, .635]) {
+    cube(x, .439, z + dz, .25, .035, .25, soot, { ry: turn });
+    for (const dx of [-.073, .073]) orb(x + dx, .466, z + dz + .091, .023, .019, .023, rust, false, false);
+  }
+}
+for (let i = 0; i < 1620; i++) {
+  const x = rand(-11.95, 8.38), off = rand(-1.50, 1.50), s = rand(.034, .118);
+  place(geo.gem, choose(stone), x, .233 - Math.max(0, Math.abs(off) - 1.21) * .27, railZ(x) + off,
+    s, rand(.031, .078), s * rand(.61, 1.42), rand(0, TAU), rand(0, TAU), rand(0, TAU), false);
+}
+for (const side of [-1, 1]) {
+  const off = side * 1.03;
+  trackRibbon(bankX - .13, 11.98, [[off - .09, -.06], [off - .09, .239], [off + .09, .239], [off + .09, -.06]], tileDark);
+  for (let x = 8.46; x < 11.72; x += .49) {
+    stick([x, -.065, railZ(x) + off + side * .08], [x + .43, .21, railZ(x + .43) + off + side * .08], .025, rust);
+  }
+}
+
+// 月台保留石质边梁和磨损的黄线，候车室朝铁轨敞开。
+const platformY = .96;
+cube(-1.79, .50, 4.78, 20.32, .80, 2.84, stone[0], { edge: true });
+cube(-1.79, .884, 4.78, 20.42, .15, 2.94, stone[3], { edge: true });
+for (let x = -11.95, i = 0; x < 8.40; x += .67, i++) {
+  const w = Math.min(.647, 8.40 - x);
+  cube(x + w / 2, .552, 6.23, w, .40, .10, stone[(i + 1) % stone.length]);
+  for (let row = 0; row < 4; row++) {
+    cube(x + w / 2, .959, 3.71 + row * .712, w - .025, .018, .668, choose(stone), { shadow: false });
+  }
+  if (i % 9 !== 6) cube(x + w / 2, .977, 5.94, w * rand(.76, .98), .010, .127, paint('#cfac59'), { rz: rand(-.012, .012), shadow: false });
+  if (i % 4 === 0) cube(x + .045, .980, 6.077, .09, .008, .018, stone[1], { shadow: false });
+}
+for (let i = 0; i < 26; i++) {
+  const x = rand(-11.86, 8.17);
+  cube(x, .986, 5.94 + rand(-.051, .054), rand(.025, .105), .005, rand(.021, .041), choose(stone), { ry: rand(-.25, .25), shadow: false });
+}
+
+function roofHeight(eave, rise, t, gable) {
+  return eave + rise * (1 - t) - Math.sin(Math.PI * t) * .12 + Math.pow(Math.abs(gable), 8) * .12;
+}
+function roof(cx, cz, width, depth, eave, rise, sheet = false) {
+  const p = [], c = [], count = Math.ceil(width / (sheet ? .30 : .31)), courses = sheet ? 2 : 7;
+  const colors = (sheet ? ['#5b726d', '#697d77', '#74867c', '#829186'] :
+    ['#3c5163', '#455c6d', '#536a77', '#586b73', '#5e7480', '#6c7d82']).map(hue => new T.Color(hue));
+  for (const side of [-1, 1]) {
+    for (let row = 0; row < courses; row++) {
+      for (let col = 0; col < count; col++) {
+        const color = choose(colors);
+        const vertex = (colU, rowV) => {
+          const u = (col + colU) / count, t = (row + rowV) / courses;
+          const ridge = Math.pow(Math.sin(colU * Math.PI), sheet ? 6 : 1.8) * (sheet ? .043 : .069);
+          const lip = t > 0 && rowV > .92 && !sheet ? .018 : 0;
+          return [cx + (u - .5) * width, roofHeight(eave, rise, t, (u - .5) * 2) + ridge + lip, cz + side * t * depth / 2];
+        };
+        for (let k = 0; k < 5; k++) {
+          const a = vertex(k / 5, 0), b = vertex((k + 1) / 5, 0), d = vertex(k / 5, 1), e = vertex((k + 1) / 5, 1);
+          if (side === 1) faceColors(p, c, color, a, d, b, b, d, e);
+          else faceColors(p, c, color, a, b, d, b, e, d);
+        }
+      }
+    }
+    const points = Array.from({ length: 11 }, (_, i) => [cx + (i / 10 - .5) * width, roofHeight(eave, rise, 1, i / 5 - 1) - .043, cz + side * depth / 2]);
+    tube(points, sheet ? .059 : .092, tileDark, model, true, 25);
+    for (const end of [-1, 1]) {
+      const x = cx + end * (width * .5 + .012);
+      tube([[x, eave + rise + .079, cz], [x, roofHeight(eave, rise, .48, 1), cz + side * depth * .24],
+        [x, eave + .104, cz + side * depth * .50]], sheet ? .051 : .087, tileDark, model, true, 15);
+    }
+  }
+  coloredSurface(p, c).castShadow = true;
+  for (let x = cx - width / 2 + .20; x <= cx + width / 2; x += .385) {
+    const y = roofHeight(eave, rise, 0, (x - cx) / (width / 2));
+    disk(x, y + .063, cz, sheet ? .057 : .101, .386, tileDark, 0, Math.PI / 2);
+  }
+}
+
+const canopyFront = 6.01, canopyBack = 3.34;
+for (const x of [-11.35, -8.14, -4.91]) {
+  for (const z of [canopyFront, canopyBack]) {
+    cube(x, 2.21, z, .16, 2.53, .16, timber[1], { edge: true });
+    cube(x, 1.25, z, .177, .56, .179, plaster);
+    cube(x, 1.01, z, .263, .12, .26, stone[1]);
+    stick([x, 2.95, z], [x + (x < -8 ? .52 : -.52), 3.43, z], .096, timber[1], .076);
+  }
+}
+for (const z of [canopyFront, canopyBack]) cube(-8.13, 3.46, z, 7.36, .19, .16, timber[0], { edge: true });
+for (const x of [-11.51, -9.90, -8.13, -6.52, -4.73]) {
+  stick([x, 3.53, 3.11], [x, 3.91, 4.68], .066, timber[1], .07);
+  stick([x, 3.91, 4.68], [x, 3.53, 6.23], .066, timber[1], .07);
+}
+roof(-8.13, 4.68, 7.9, 3.55, 3.57, .48, true);
+cube(-8.28, 3.42, 6.022, 2.82, .58, .14, timber[0], { edge: true });
+sign('山　霞', 'やまがすみ　 YAMAGASUMI', 2.67, .465, -8.28, 3.42, 6.102, { bg: '#e8d9b3', fg: '#3e524c' });
+cube(-8.28, 3.32, 6.111, 2.58, .022, .008, jade, { shadow: false });
+cube(-4.90, 2.76, 6.116, .35, 1.09, .046, timber[0], { edge: true });
+sign('山霞駅', '', .30, 1.04, -4.90, 2.76, 6.143, { vertical: true, fg: '#3d423c', bg: '#eae1c8' });
+
+const windowGlass = new T.MeshBasicMaterial({ color: '#bcdbd5', transparent: true, opacity: .09, depthWrite: false, side: T.DoubleSide });
+function glassPane(x, y, z, width, height, angle = 0) {
+  const pane = direct(geo.plane, windowGlass, x, y, z, model, false);
+  pane.scale.set(width, height, 1);
+  pane.rotation.y = angle;
+  return pane;
+}
+function bench(x, y, z, width) {
+  for (const a of [-.34, .34]) {
+    cube(x + width * a, y + .213, z, .082, .43, .47, soot);
+    cube(x + width * a, y + .048, z, .17, .066, .58, soot);
+    cube(x + width * a, y + .589, z - .255, .064, .622, .067, soot, { rx: .108 });
+  }
+  for (let j = 0; j < 4; j++) cube(x, y + .47, z - .227 + j * .149, width, .066, .133, mint, { edge: j === 0 || j === 3 });
+  for (let j = 0; j < 3; j++) cube(x, y + .63 + j * .115, z - .276 - j * .019, width, .093, .065, j === 1 ? jade : mint);
+  for (let j = 0; j < 13; j++) cube(x + rand(-.44, .44) * width, y + .506, z + rand(-.23, .24), rand(.046, .21), .005, .015, timber[4], { shadow: false });
+  for (const dz of [-.264, .263]) orb(x - width * .34, y + .514, z + dz, .020, .009, .020, steel, false, false);
+}
+bench(-9.76, .978, 5.20, 2.40);
+bench(-6.40, .978, 5.20, 2.50);
+bench(-9.83, 1.044, 3.89, 2.48);
+bench(-5.83, .978, 3.87, 1.75);
+cube(-9.92, 1.016, 3.94, 3.28, .12, .97, timber[1], { edge: true });
+cube(-9.92, 1.44, 3.48, 3.28, .81, .14, plaster);
+cube(-9.92, 3.18, 3.48, 3.28, .27, .14, timber[1]);
+for (const x of [-11.54, -10.49, -9.42, -8.30]) cube(x, 2.16, 3.48, .089, 2.26, .154, timber[0]);
+for (const x of [-11.02, -9.96, -8.86]) {
+  glassPane(x, 2.44, 3.49, .96, 1.24);
+  cube(x, 1.83, 3.51, 1.05, .09, .15, timber[0]);
+  cube(x, 2.39, 3.54, .96, .042, .08, timber[1]);
+}
+cube(-11.54, 1.65, 4.03, .112, 1.12, 1.19, timber[1]);
+glassPane(-11.535, 2.65, 4.03, 1.02, .91, Math.PI / 2);
+for (const z of [3.49, 4.59]) cube(-11.54, 2.57, z, .13, 1.37, .072, timber[0]);
+cube(-10.25, 2.67, 3.574, 1.22, .57, .033, timber[0], { edge: true });
+sign('山の便り', '落葉の季節　十一月', 1.12, .48, -10.25, 2.67, 3.599, { fg: '#626758', bg: '#cbbd93' });
+for (const x of [-10.95, -7.00]) {
+  cube(x, 3.445, 4.38, .73, .12, .22, soot);
+  cube(x, 3.361, 4.38, .61, .061, .18, litPaper);
+  practical(x, 3.28, 4.38, .83, 2.1, 4.5);
+}
+const timeTable = texture(320, 512, (ctx, w, h) => {
+  ctx.fillStyle = '#dcc99f';
+  ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = '#5a4a40';
+  ctx.textAlign = 'center';
+  ctx.font = 'bold 37px "Yu Mincho", serif';
+  ctx.fillText('列車時刻表', w / 2, 57);
+  ctx.font = '19px monospace';
+  for (let row = 0; row < 12; row++) {
+    const y = 90 + row * 32;
+    ctx.strokeStyle = '#ab956f';
+    ctx.beginPath();
+    ctx.moveTo(22, y + 12);
+    ctx.lineTo(w - 22, y + 12);
+    ctx.stroke();
+    ctx.fillText(`${String(6 + row).padStart(2, '0')}    ${row % 3 === 0 ? '07' : '18'}    42     ${row % 3 === 0 ? '56' : '  '}`, w / 2, y);
+  }
+  ctx.font = '17px serif';
+  ctx.fillText('山吹・渓谷方面', w / 2, h - 25);
+});
+cube(-4.55, 1.993, 5.996, .68, 1.05, .11, timber[0], { edge: true });
+graphic(timeTable, .60, .96, -4.55, 1.993, 6.057);
+const clockMap = texture(256, 256, (ctx, w, h) => {
+  ctx.fillStyle = '#ede0bd';
+  ctx.beginPath(); ctx.arc(w / 2, h / 2, w / 2, 0, TAU); ctx.fill();
+  ctx.strokeStyle = '#4d4443';
+  for (let i = 0; i < 60; i++) {
+    const a = i * TAU / 60, x = Math.sin(a), y = -Math.cos(a), r = i % 5 === 0 ? 94 : 104;
+    ctx.lineWidth = i % 5 === 0 ? 4 : 1.7;
+    ctx.beginPath(); ctx.moveTo(128 + x * r, 128 + y * r); ctx.lineTo(128 + x * 114, 128 + y * 114); ctx.stroke();
+  }
+  for (const [a, length, width] of [[(5 + 8 / 60) * TAU / 12, 68, 9], [8 * TAU / 60, 92, 5]]) {
+    ctx.lineWidth = width; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(128, 128); ctx.lineTo(128 + Math.sin(a) * length, 128 - Math.cos(a) * length); ctx.stroke();
+  }
+  ctx.fillStyle = '#63524a';
+  ctx.beginPath(); ctx.arc(128, 128, 7, 0, TAU); ctx.fill();
+});
+stick([-6.25, 3.56, 5.93], [-6.25, 3.22, 5.93], .023, soot);
+disk(-6.25, 3.003, 5.93, .285, .105, soot, Math.PI / 2);
+const clockFace = direct(new T.CircleGeometry(.252, 48), new T.MeshStandardMaterial({ map: clockMap, roughness: .88 }), -6.25, 3.003, 5.987, model, false);
+clockFace.rotation.y = 0;
+
+const pageMap = texture(512, 320, (ctx, w, h) => {
+  ctx.fillStyle = '#eddfbb'; ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = 'rgba(86,62,50,.35)'; ctx.lineWidth = 1.7;
+  for (let col = 0; col < 21; col++) {
+    for (let row = 0; row < 16; row++) {
+      if (rand() < .14) continue;
+      const x = 24 + col * 22, y = 29 + row * 16, dx = rand(5, 12);
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + dx, y); ctx.moveTo(x + 3, y + 4); ctx.lineTo(x + 7, y + 8); ctx.stroke();
+    }
+  }
+});
+function flexSheet(w, h, x, y, z, material, action, rx = 0) {
+  const g = new T.PlaneGeometry(w, h, 10, 9), pos = g.getAttribute('position');
+  const originals = pos.array.slice();
+  const sheet = direct(g, material, x, y, z);
+  sheet.rotation.x = rx;
+  sheet.frustumCulled = false;
+  clockwork.push(t => {
+    for (let i = 0; i < pos.count; i++) {
+      const bx = originals[i * 3], by = originals[i * 3 + 1];
+      pos.setZ(i, action(bx, by, t));
+    }
+    pos.needsUpdate = true;
+    g.computeVertexNormals();
+  });
+  return sheet;
+}
+function openBook(x, y, z, scale, flutter = false) {
+  const w = scale * .64, d = scale * .48;
+  cube(x, y, z, w * 1.10, .022, d * 1.07, soot, { edge: true });
+  for (const side of [-1, 1]) {
+    cube(x + side * w * .253, y + .023, z, w * .488, .026, d, paper, { rz: side * -.040 });
+    graphic(pageMap, w * .47, d * .97, x + side * w * .25, y + .038, z, { rx: -Math.PI / 2 });
+  }
+  if (flutter) {
+    const material = new T.MeshStandardMaterial({ map: pageMap, side: T.DoubleSide, roughness: .92 });
+    flexSheet(w * .49, d * .97, x + w * .25, y + .042, z, material, (bx, by, t) => {
+      const bow = Math.pow(clamp((bx + w * .245) / (w * .49), 0, 1), 1.6);
+      return bow * (.042 + .044 * motion * Math.sin(t * 2.3 + by * 6.5));
+    }, -Math.PI / 2);
+  }
+}
+const bagBlue = paint('#35465f'), bagTrim = paint('#252e4d');
+cube(-10.09, 1.751, 5.20, .60, .52, .31, bagBlue, { rz: -.070, edge: true });
+cube(-10.08, 1.89, 5.359, .61, .19, .079, bagTrim, { rz: -.070, edge: true });
+cube(-10.08, 1.808, 5.407, .11, .065, .022, gold, { rz: -.07 });
+tube([[-10.29, 1.99, 5.18], [-10.29, 2.10, 5.17], [-9.93, 2.09, 5.17], [-9.92, 1.99, 5.18]], .026, bagTrim);
+tube([[-10.28, 1.84, 5.045], [-10.48, 1.62, 4.92], [-10.49, 1.48, 5.09], [-10.22, 1.49, 5.20]], .027, bagBlue);
+openBook(-9.32, 1.506, 5.21, .88, true);
+
+// 石阶在高处折向鸟居，短阶通往书店门廊。
+for (let i = 0; i < 34; i++) {
+  const z = 4.27 - i * .451, x = stairX(z), y = grade(z), depth = .462;
+  cube(x, y - .215, z, 2.74, .40, depth, stone[0]);
+  for (let c = 0; c < 4; c++) {
+    cube(x - 1.016 + c * .677, y, z, .651, .093, depth - .027, choose(stone), { rz: rand(-.012, .012) });
+    if ((i + c) % 5 === 0) orb(x - 1.29 + c * .677, y + .051, z + rand(-.17, .17), rand(.066, .125), .018, .051, choose(moss), true, false);
+  }
+}
+const handrail = [];
+for (let i = 0; i < 9; i++) {
+  const z = 4.34 - i * 1.55, x = stairX(z) - 1.395, y = grade(z);
+  cube(x, y + .061, z, .15, .12, .15, stone[2]);
+  stick([x, y + .095, z], [x, y + .83, z], .032, rust);
+  orb(x, y + .834, z, .041, .042, .041, rust);
+  handrail.push([x, y + .83, z]);
+}
+tube(handrail, .033, soot, model, true, 38);
+for (const x of [-2.97, -.27]) {
+  cube(x, 1.37, 4.55, .10, .83, .105, soot, { edge: true });
+  orb(x, 1.815, 4.55, .058, .062, .058, rust);
+}
+for (let j = 0; j < 4; j++) stick([-2.97 + .083 * j, 1.09, 4.57], [-2.97 + .083 * j, 1.70, 4.57], .017, rust);
+for (let j = 0; j < 4; j++) stick([-.27 - .083 * j, 1.09, 4.57], [-.27 - .083 * j, 1.70, 4.57], .017, rust);
+for (const y of [1.11, 1.67]) {
+  cube(-2.85, y, 4.57, .31, .034, .045, soot);
+  cube(-.39, y, 4.57, .31, .034, .045, soot);
+}
+for (let j = 0; j < 4; j++) {
+  const x = -.59 + .355 * j, y = 1.70 + j * .172;
+  cube(x, y - .14, 2.34, .375, .328, 1.21, stone[0]);
+  cube(x, y + .026, 2.34, .363, .083, 1.233, choose(stone), { edge: j === 3 });
+}
+for (let row = 0; row < 4; row++) {
+  for (let col = 0; col < 14; col++) {
+    cube(.45 + col * .547 + (row % 2) * .171, 2.312, 1.74 + row * .379, .520, .074, .348, choose(stone), { ry: rand(-.030, .030) });
+  }
+}
+
+// 山吹旧书店，临街是可看进室内的木构店面。
+const shop = { x: .37, y: 2.359, z: 1.62, w: 7.38, d: 5.91 };
+const X = x => shop.x + x, Y = y => shop.y + y, Z = z => shop.z + z;
+const woodBox = (x, y, z, w, h, d, material, options) => cube(X(x), Y(y), Z(z), w, h, d, material, options);
+const darkWall = paint('#54434a'), upstairsWall = paint('#baa182');
+woodBox(3.69, .05, -2.95, 7.38, .20, 5.93, timber[0], { edge: true });
+for (let x = .11; x < 7.34; x += .214) {
+  woodBox(x, .169, -2.95, .202, .031, 5.82, choose(timber.slice(1)), { shadow: false });
+  if (rand() < .42) woodBox(x + .039, .187, rand(-5.65, -.3), .010, .004, rand(.30, .93), timber[2], { shadow: false });
+}
+woodBox(3.69, 3.115, -2.95, 7.39, .23, 5.96, timber[0], { edge: true });
+woodBox(3.69, 5.83, -2.95, 7.45, .14, 5.96, timber[0], { edge: true });
+woodBox(3.69, 1.58, -5.87, 7.38, 2.99, .15, darkWall);
+woodBox(3.69, 4.58, -5.87, 7.38, 2.71, .15, upstairsWall);
+for (const sx of [.08, 2.53, 4.92, 7.30]) {
+  woodBox(sx, 3.0, -5.86, .141, 5.88, .145, timber[0], { edge: true });
+}
+for (let x = .11; x < 7.28; x += .19) {
+  woodBox(x, .58, -5.962, .170, .87, .040, choose(timber.slice(1, 4)), { shadow: false });
+}
+woodBox(.07, 1.59, -2.96, .14, 2.98, 5.92, timber[1]);
+woodBox(.07, 4.57, -2.96, .14, 2.71, 5.92, upstairsWall);
+for (let z = -.08; z > -5.82; z -= .197) {
+  woodBox(-.022, .58, z, .044, .85, .180, choose(timber.slice(1)), { shadow: false });
+  woodBox(7.416, .54, z, .039, .71, .181, choose(timber.slice(1)), { shadow: false });
+}
+for (const z of [-5.85, -3.70, -1.45, -.035]) {
+  woodBox(.035, 3, z, .163, 5.87, .15, timber[0], { edge: true });
+  woodBox(7.345, 3, z, .163, 5.87, .15, timber[0], { edge: true });
+}
+woodBox(7.34, .535, -2.95, .14, .72, 5.92, timber[1]);
+woodBox(7.34, 2.90, -2.95, .15, .36, 5.92, timber[1]);
+woodBox(7.34, 3.55, -2.95, .15, .49, 5.92, upstairsWall);
+woodBox(7.34, 5.56, -2.95, .15, .53, 5.92, upstairsWall);
+for (const z of [-4.92, -2.57, -.72]) {
+  const w = z < -.75 ? 2.14 : 1.23;
+  glassPane(X(7.391), Y(1.79), Z(z), w, 1.79, Math.PI / 2);
+  woodBox(7.405, 1.79, z, .072, .047, w, timber[0]);
+  for (const a of [-.25, .25]) woodBox(7.407, 1.78, z + w * a, .058, 1.83, .04, timber[0]);
+}
+woodBox(7.42, .90, -2.95, .255, .092, 5.98, timber[0], { edge: true });
+for (const z of [-4.60, -.60]) {
+  woodBox(7.35, 4.48, z, .15, 1.44, z < -1 ? 2.44 : 1.17, upstairsWall);
+}
+glassPane(X(7.386), Y(4.54), Z(-2.44), 1.49, 1.40, Math.PI / 2);
+for (const z of [-3.18, -2.72, -2.24, -1.72]) woodBox(7.409, 4.54, z, .068, 1.47, .044, timber[0]);
+woodBox(7.417, 4.51, -2.47, .073, .054, 1.58, timber[0]);
+
+woodBox(3.69, .128, .09, 7.45, .14, .31, timber[3], { edge: true });
+woodBox(3.70, 2.94, .018, 7.47, .23, .192, timber[0], { edge: true });
+woodBox(.425, 1.53, .010, .73, 2.77, .145, timber[1]);
+woodBox(5.97, .48, .010, 2.74, .64, .142, timber[1]);
+woodBox(5.97, 2.706, .010, 2.74, .217, .154, timber[1]);
+for (const x of [.085, .788, 4.56, 7.30]) woodBox(x, 1.565, .034, .159, 2.84, .17, timber[0], { edge: true });
+for (let x = 4.73; x <= 7.18; x += .49) woodBox(x, 1.76, .068, .048, 1.855, .086, timber[0]);
+woodBox(5.96, 1.73, .068, 2.66, .052, .093, timber[0]);
+woodBox(5.96, .81, .111, 2.82, .085, .29, timber[0], { edge: true });
+glassPane(X(5.94), Y(1.74), Z(.094), 2.55, 1.785);
+for (let x = .12; x <= .72; x += .143) woodBox(x, 1.52, .097, .119, 2.66, .049, choose(timber.slice(1, 4)), { shadow: false });
+// 滑开的门贴在左侧，门前是可以摆动的四片暖帘。
+for (const x of [.48, 1.30]) woodBox(x, 1.51, .172, .071, 2.67, .077, timber[0]);
+for (const y of [.195, .88, 1.58, 2.82]) woodBox(.89, y, .172, .91, .065, .078, timber[0]);
+woodBox(.89, .529, .172, .83, .63, .054, timber[2]);
+woodBox(.89, 1.82, .174, .05, 1.93, .075, timber[1]);
+glassPane(X(.89), Y(1.83), Z(.211), .75, 1.85);
+woodBox(1.206, 1.48, .237, .055, .16, .035, gold);
+stick([X(1.31), Y(2.66), Z(.314)], [X(4.55), Y(2.66), Z(.314)], .023, timber[0]);
+const norenInk = paint('#263c5c');
+for (const charIndex of [0, 1, 2, 3]) {
+  const map = texture(224, 272, (ctx, w, h) => {
+    ctx.fillStyle = ['#263b5b', '#2c425e', '#2a405a', '#293e5b'][charIndex];
+    ctx.fillRect(0, 0, w, h);
+    for (let i = 0; i < 150; i++) {
+      ctx.strokeStyle = i % 2 ? 'rgba(209,219,214,.060)' : 'rgba(7,18,46,.095)';
+      ctx.beginPath(); ctx.moveTo(i * w / 150, 4); ctx.lineTo(i * w / 150, h - 4); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(219,224,209,.43)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(12, h - 20); ctx.lineTo(w - 12, h - 20); ctx.stroke();
+    ctx.fillStyle = '#e8dcc2'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = 'bold 116px "Yu Mincho", SimSun, serif'; ctx.fillText(['山', '吹', '古', '書'][charIndex], w / 2, h * .52);
+  });
+  const textile = new T.MeshToonMaterial({ map, gradientMap: ramp, side: T.DoubleSide });
+  const h = .66 + charIndex % 2 * .045;
+  flexSheet(.748, h, X(1.74 + charIndex * .79), Y(2.645 - h / 2), Z(.315), textile, (bx, by, t) => {
+    const drape = Math.pow(clamp(.5 - by / h, 0, 1), 1.35);
+    return .014 * Math.sin(bx * 12) + drape * Math.sin(t * 1.72 + charIndex * .74 + bx * 4.9) * .085 * motion;
+  });
+  for (const a of [-.18, .20]) woodBox(1.74 + charIndex * .79 + a, 2.653, .315, .059, .087, .042, norenInk);
+}
+woodBox(3.73, 3.04, .487, 4.98, .64, .179, timber[0], { edge: true });
+woodBox(3.73, 3.04, .59, 4.77, .515, .055, litPaper);
+sign('山吹旧書店', '古本・画集・旅の記録', 4.70, .486, X(3.73), Y(3.042), Z(.623), { bg: '#edc58d', fg: '#553b37', emissive: .27 });
+practical(X(3.73), Y(3.01), Z(.74), .92, 4.2, 2.9);
+woodBox(3.69, 2.773, .55, 7.63, .091, .99, tileDark, { rx: .115, edge: true });
+for (let x = -.035; x <= 7.45; x += .216) {
+  const ridge = matrix(X(x), Y(2.833), Z(.568), .047, .98, .047, 1.686);
+  collections(geo.cyl, paint('#536b74'), true, true).push(ridge);
+}
+for (const x of [.31, 3.68, 7.12]) stick([X(x), Y(2.23), Z(.094)], [X(x), Y(2.72), Z(.942)], .068, timber[0], .067);
+
+const books = ['#a3544e', '#638284', '#b69065', '#d0b993', '#8b774f', '#81728d', '#8f9f7b', '#a47666', '#53647c', '#b06452', '#b59d56'].map(paint);
+function bookcase(x, y, z, width, height, rows, azimuth = 0) {
+  const c = Math.cos(azimuth), s = Math.sin(azimuth), bay = height / rows;
+  function local(cx, cy, cz, w, h, d, material, options = {}) {
+    cube(x + cx * c + cz * s, y + cy, z - cx * s + cz * c, w, h, d, material, { ...options, ry: azimuth });
+  }
+  local(0, height / 2, -.229, width, height, .102, timber[0], { edge: true });
+  for (const side of [-1, 1]) local(side * (width / 2 - .048), height / 2, .006, .095, height, .55, timber[1]);
+  for (let r = 0; r <= rows; r++) local(0, r * bay, .011, width, .062, .57, timber[r % 2 ? 2 : 1], { edge: r === 0 || r === rows });
+  for (let r = 0; r < rows; r++) {
+    let u = -width / 2 + .10;
+    while (u < width / 2 - .17) {
+      const w = rand(.065, .150), h = rand(.49, .86) * bay, depth = rand(.24, .37);
+      const floor = r * bay + .038;
+      if (rand() < .058 && u + .38 < width / 2) {
+        for (let j = 0; j < 3; j++) local(u + .17, floor + .041 + j * .055, .067 - j * .018, .325 - j * .028, .050, .27, choose(books), { shadow: false });
+        u += .34;
+        continue;
+      }
+      local(u + w / 2, floor + h / 2, .242 - depth / 2, w, h, depth, choose(books), { rz: rand(-.054, .054) });
+      if (rand() < .69) local(u + w / 2, floor + h * .74, .244, .62 * w, .015, .010, choose([paper, gold]), { shadow: false });
+      if (rand() < .32) local(u + w / 2, floor + h * .22, .246, .71 * w, .012, .011, paper, { shadow: false });
+      u += w + rand(.011, .027);
+    }
+  }
+}
+for (let i = 0; i < 3; i++) {
+  const x = 1.27 + i * 2.37;
+  bookcase(X(x), Y(.207), Z(-5.49), 2.24, 2.64, 5);
+  sign(['文学', '旅と山', '画集'][i], '', .60, .177, X(x), Y(2.926), Z(-5.15), { bg: '#c8b38c', fg: '#5a4b46' });
+}
+bookcase(X(.42), Y(.207), Z(-2.75), 3.97, 2.71, 5, Math.PI / 2);
+bookcase(X(6.99), Y(.207), Z(-2.77), 3.58, 1.10, 2, -Math.PI / 2);
+bookcase(X(3.54), Y(.207), Z(-3.1), 1.15, .94, 2, .07);
+woodBox(3.29, .194, -2.08, 1.42, .027, 1.93, paint('#8c625c'), { edge: true, shadow: false });
+for (let i = 0; i < 21; i++) woodBox(3.29, .209, -2.96 + i * .086, 1.32, .004, .009, paint('#a97865'), { shadow: false });
+
+woodBox(5.49, .64, -1.29, 2.19, .94, .77, timber[1], { edge: true });
+for (let x = 4.45; x < 6.53; x += .186) woodBox(x, .663, -.889, .158, .817, .030, choose(timber.slice(1)), { shadow: false });
+woodBox(5.49, 1.137, -1.29, 2.25, .097, .88, timber[0], { edge: true });
+woodBox(5.49, 1.27, -1.25, .52, .17, .37, jade, { edge: true });
+woodBox(5.49, 1.414, -1.319, .52, .154, .24, jade, { rx: -.23, edge: true });
+woodBox(5.49, 1.482, -1.172, .261, .098, .035, soot);
+sign('¥ 320', '', .24, .071, X(5.49), Y(1.485), Z(-1.153), { bg: '#afa88e', fg: '#453c39', border: false });
+for (let r = 0; r < 3; r++) for (let c = 0; c < 5; c++) {
+  disk(X(5.305 + c * .093), Y(1.369 + r * .026), Z(-1.088 - r * .068), .024, .013, choose([pale, gold, soot]));
+}
+woodBox(6.13, 1.204, -1.108, .53, .030, .225, timber[0], { edge: true });
+for (const z of [-1.22, -.995]) woodBox(6.13, 1.240, z, .53, .032, .034, timber[2]);
+for (let r = 0; r < 8; r++) {
+  const x = X(5.902 + r * .066);
+  stick([x, Y(1.239), Z(-1.215)], [x, Y(1.239), Z(-1.003)], .006, gold);
+  for (const z of [-1.187, -1.154, -1.092 + r % 3 * .012, -1.041]) orb(x, Y(1.246), Z(z), .029, .023, .014, terracotta);
+}
+for (let i = 0; i < 6; i++) woodBox(4.65, 1.195 + i * .018, -1.10, .45, .014, .34, i % 3 === 0 ? pale : paper, { ry: rand(-.12, .12) });
+for (let i = 0; i < 3; i++) woodBox(6.32, 1.205 + i * .075, -1.53, .44, .063, .29, books[i + 1], { ry: rand(-.15, .15), edge: i === 0 });
+
+function paperLamp(x, y, z, lantern = false) {
+  disk(x, y + .026, z, .144, .05, gold);
+  stick([x, y + .04, z], [x, y + .48, z], .023, gold);
+  if (lantern) {
+    taper(x, y + .457, z, .172, .96, .362, litPaper, 16);
+    for (let r = 0; r < 7; r++) ring(x, y + .266 + r * .063, z, .17, .006, paper, Math.PI / 2);
+    disk(x, y + .641, z, .165, .031, timber[0]);
+  } else {
+    taper(x, y + .513, z, .245, .48, .212, jade, 16);
+    orb(x, y + .405, z, .087, .048, .087, litPaper);
+    ring(x, y + .405, z, .232, .013, gold, Math.PI / 2);
+  }
+  practical(x, y + .435, z, 1.0, lantern ? 4.8 : 3.0, 3.4);
+}
+paperLamp(X(4.72), Y(1.191), Z(-1.56));
+function pendant(x, y, z) {
+  stick([x, y + .38, z], [x, y + .13, z], .018, soot);
+  taper(x, y + .06, z, .252, .48, .165, soot, 16);
+  orb(x, y - .02, z, .111, .063, .111, litPaper);
+  ring(x, y - .026, z, .234, .014, gold, Math.PI / 2);
+  practical(x, y - .065, z, 1.49, 9.3, 5.4);
+}
+pendant(X(2.56), Y(2.641), Z(-1.72));
+pendant(X(5.83), Y(2.641), Z(-3.33));
+
+// 柜台旁的橘猫蜷在纸箱里，尾尖和耳朵偶尔轻动。
+const catSpot = [X(4.02), Y(.198), Z(-.89)], [catX, catY, catZ] = catSpot;
+const cardboard = paint('#af8057'), catOrange = paint('#ce8b54'), catStripe = paint('#a25e43'), catCream = paint('#e6b678');
+cube(catX, catY + .037, catZ, .87, .075, .61, cardboard);
+for (const x of [-.414, .414]) cube(catX + x, catY + .169, catZ, .041, .279, .613, cardboard, { edge: true });
+cube(catX, catY + .167, catZ - .305, .87, .278, .047, paper);
+cube(catX, catY + .112, catZ + .318, .86, .134, .036, cardboard, { rx: -.29, edge: true });
+cube(catX, catY + .197, catZ + .382, .86, .098, .034, paper, { rx: .85 });
+orb(catX - .10, catY + .211, catZ - .055, .308, .175, .235, catOrange);
+orb(catX + .142, catY + .236, catZ + .120, .166, .140, .161, catOrange);
+orb(catX + .143, catY + .193, catZ + .229, .104, .071, .076, catCream);
+orb(catX + .143, catY + .217, catZ + .30, .023, .015, .016, catStripe);
+for (const x of [.075, .217]) tube([[catX + x - .037, catY + .255, catZ + .248], [catX + x, catY + .246, catZ + .268], [catX + x + .031, catY + .255, catZ + .247]], .007, catStripe, model, false, 8);
+for (let i = 0; i < 3; i++) {
+  const sx = catX - .24 + i * .107;
+  tube([[sx - .029, catY + .303, catZ - .234], [sx, catY + .366, catZ - .114], [sx + .031, catY + .36, catZ + .073]], .013, catStripe, model, false, 9);
+}
+const catEar = group(catX + .22, catY + .329, catZ + .108);
+const ear = direct(taperGeometry(.06, 3), catOrange, 0, .040, 0, catEar);
+ear.scale.set(.071, .146, .062);
+const earMate = direct(taperGeometry(.06, 3), catOrange, catX + .069, catY + .369, catZ + .105);
+earMate.scale.set(.067, .140, .058); earMate.rotation.z = .22;
+const catTail = group(catX - .305, catY + .196, catZ + .068);
+tube([[0, 0, 0], [-.052, -.019, .124], [.070, -.028, .218], [.215, -.022, .215], [.256, .014, .170]], .043, catOrange, catTail);
+clockwork.push(t => {
+  const pulse = Math.exp(-Math.pow((t % 31 - 22.3) / .70, 2));
+  catTail.rotation.y = Math.sin(t * 6) * pulse * .48 * motion;
+  catEar.rotation.z = -.22 + Math.sin(t * 12) * pulse * .22 * motion;
+});
+
+// 风扇的转子与摆动机头使用嵌套枢轴。
+const fanX = X(2.11), fanY = Y(.195), fanZ = Z(-1.46);
+disk(fanX, fanY + .045, fanZ, .244, .086, jade);
+stick([fanX, fanY + .057, fanZ], [fanX, fanY + .88, fanZ], .043, jade);
+const fanHead = group(fanX, fanY + 1.005, fanZ), propeller = group(0, 0, .043, fanHead);
+direct(geo.ball, jade, 0, 0, -.101, fanHead).scale.set(.167, .171, .179);
+for (let i = 0; i < 3; i++) {
+  const a = TAU * i / 3;
+  const blade = direct(geo.ball, mint, Math.sin(a) * .143, Math.cos(a) * .143, .015, propeller);
+  blade.scale.set(.104, .18, .026); blade.rotation.z = -a + .23;
+}
+direct(geo.ball, gold, 0, 0, .079, fanHead).scale.set(.060, .060, .055);
+for (const r of [.12, .21, .30, .363]) direct(ringGeometry(r, .0072, 32), steel, 0, 0, .130, fanHead, false);
+for (let i = 0; i < 12; i++) {
+  const a = i * TAU / 12;
+  tube([[0, 0, .138], [Math.cos(a) * .19, Math.sin(a) * .19, .134], [Math.cos(a) * .359, Math.sin(a) * .359, .108]], .005, steel, fanHead, false, 6);
+}
+clockwork.push(t => { fanHead.rotation.y = Math.sin(t * .52) * .51 * motion; propeller.rotation.z = -t * 16 * motion; });
+
+// 二楼的榻榻米画室与晾衣阳台。
+const tatami = ['#929066', '#a1946e', '#9e936d', '#b0a47c'].map(paint);
+for (let x = .585, col = 0; x < 7.25; x += 1.04, col++) {
+  for (let z = -.721, row = 0; z > -5.6; z -= 1.44, row++) {
+    woodBox(x, 3.257, z, 1.012, .057, 1.41, tatami[(row + col) % 4]);
+    for (const a of [-.490, .490]) woodBox(x + a, 3.285, z, .038, .006, 1.411, moss[0], { shadow: false });
+    for (let i = 0; i < 10; i++) woodBox(x, 3.286, z - .633 + i * .14, .94, .004, .008, tatami[3], { shadow: false });
+  }
+}
+woodBox(3.69, 3.54, .02, 7.36, .46, .158, upstairsWall);
+woodBox(3.69, 5.52, .02, 7.36, .40, .161, upstairsWall);
+for (const x of [.089, 3.94, 7.29]) woodBox(x, 4.625, .053, .158, 2.49, .184, timber[0], { edge: true });
+woodBox(2.03, 3.812, .059, 3.70, .102, .322, timber[3], { edge: true });
+woodBox(2.03, 5.32, .049, 3.70, .109, .188, timber[0]);
+woodBox(1.015, 4.567, .102, 1.695, 1.411, .028, paper);
+for (const x of [.171, 1.859]) woodBox(x, 4.56, .132, .067, 1.46, .065, timber[0]);
+for (let t = 0; t <= 6; t++) woodBox(.197 + t * .274, 4.56, .135, .029, 1.43, .049, timber[2]);
+for (let t = 0; t <= 5; t++) woodBox(1.018, 3.856 + t * .278, .140, 1.685, .027, .041, timber[2]);
+woodBox(1.778, 4.344, .169, .059, .169, .025, timber[0]);
+woodBox(5.63, 3.81, .091, 3.29, .097, .225, timber[0]);
+glassPane(X(5.62), Y(4.557), Z(.10), 3.15, 1.43);
+for (let i = 0; i < 7; i++) woodBox(4.068 + i * .519, 4.563, .129, .048, 1.449, .073, timber[0]);
+woodBox(5.63, 4.556, .134, 3.21, .053, .067, timber[0]);
+woodBox(2.80, 3.72, -.85, 1.39, .087, .77, timber[3], { edge: true });
+for (const x of [2.26, 3.33]) for (const z of [-.60, -1.10]) woodBox(x, 3.508, z, .081, .401, .084, timber[1]);
+openBook(X(2.65), Y(3.777), Z(-.853), .99);
+woodBox(3.224, 3.784, -.772, .342, .037, .218, timber[0], { edge: true });
+for (let i = 0; i < 6; i++) orb(X(3.101 + i * .049), Y(3.809), Z(-.773), .019, .008, .054, books[i]);
+stick([X(2.91), Y(3.81), Z(-1.078)], [X(3.14), Y(3.811), Z(-.955)], .009, timber[0]);
+woodBox(2.43, 3.327, -.295, .62, .076, .423, paint('#986c6c'), { edge: true });
+paperLamp(X(3.57), Y(3.297), Z(-1.68), true);
+const guitar = group(X(3.52), Y(3.31), Z(-1.02));
+guitar.rotation.set(-.14, -.19, -.19);
+const amberWood = paint('#b4794f');
+direct(geo.ball, amberWood, 0, .278, 0, guitar).scale.set(.259, .273, .078);
+direct(geo.ball, amberWood, 0, .501, -.006, guitar).scale.set(.194, .226, .064);
+direct(geo.ball, soot, 0, .454, .069, guitar).scale.set(.069, .073, .008);
+direct(geo.box, timber[0], 0, .886, -.008, guitar).scale.set(.093, .699, .044);
+direct(geo.box, timber[3], 0, 1.256, -.008, guitar).scale.set(.123, .175, .060);
+direct(geo.box, timber[0], 0, .244, .080, guitar).scale.set(.146, .030, .023);
+for (let i = 0; i < 5; i++) tube([[-.034 + i * .017, .250, .097], [-.029 + i * .014, .685, .026], [-.029 + i * .014, 1.300, .024]], .0025, pale, guitar, false, 6);
+for (let i = 0; i < 6; i++) direct(geo.box, gold, 0, .641 + i * .088, .026, guitar, false).scale.set(.096, .008, .011);
+for (let i = 0; i < 3; i++) for (const a of [-1, 1]) direct(geo.ball, pale, a * .071, 1.198 + i * .054, -.013, guitar).scale.set(.021, .017, .022);
+woodBox(5.74, 3.21, .619, 3.26, .172, 1.17, timber[0], { edge: true });
+for (let x = 4.16; x < 7.32; x += .187) woodBox(x, 3.306, .602, .170, .034, 1.144, choose(timber.slice(2)), { shadow: false });
+for (const x of [4.11, 5.72, 7.35]) woodBox(x, 3.83, 1.146, .088, 1.08, .091, timber[0], { edge: true });
+for (const y of [3.44, 4.365]) woodBox(5.73, y, 1.146, 3.32, .068, .085, timber[0], { edge: true });
+for (let x = 4.26; x < 7.32; x += .182) woodBox(x, 3.88, 1.146, .035, .895, .045, timber[2]);
+for (const x of [4.17, 7.27]) stick([X(x), Y(3.36), Z(.814)], [X(x), Y(5.49), Z(.814)], .026, steel);
+tube([[X(4.17), Y(5.46), Z(.812)], [X(5.69), Y(5.34), Z(.812)], [X(7.27), Y(5.47), Z(.812)]], .010, soot, model, false);
+const linen = new T.MeshToonMaterial({ color: '#e4dfcf', gradientMap: ramp, side: T.DoubleSide });
+const collar = paint('#c1bab2');
+const sleeveL = flexSheet(.352, .295, X(5.09), Y(5.12), Z(.825), linen, (a, b, t) => Math.sin(t * 1.53 + 4 * a) * (.54 - b / .295) * .072 * motion);
+const sleeveR = flexSheet(.352, .295, X(5.89), Y(5.12), Z(.825), linen, (a, b, t) => Math.sin(t * 1.53 + 4 * a + .55) * (.54 - b / .295) * .072 * motion);
+sleeveL.rotation.z = .48; sleeveR.rotation.z = -.48;
+flexSheet(.635, .791, X(5.49), Y(4.949), Z(.827), linen, (a, b, t) => Math.pow(clamp(.5 - b / .79, 0, 1), 1.25) * Math.sin(t * 1.42 + 8 * a) * .082 * motion);
+woodBox(5.49, 5.292, .848, .20, .118, .014, collar, { rz: -.06 });
+for (const x of [5.25, 5.72, 6.56, 6.94]) woodBox(x, 5.372, .836, .032, .101, .050, timber[3]);
+const towel = new T.MeshToonMaterial({ color: '#bc907e', gradientMap: ramp, side: T.DoubleSide });
+flexSheet(.425, .62, X(6.75), Y(5.069), Z(.830), towel, (a, b, t) => (.5 - b / .62) * Math.sin(t * 1.65 + a * 6 + 1.1) * .086 * motion);
+
+const shopRoof = { cx: X(3.69), cz: Z(-2.955), w: 8.22, d: 7.02, eave: Y(5.827), rise: 1.17 };
+roof(shopRoof.cx, shopRoof.cz, shopRoof.w, shopRoof.d, shopRoof.eave, shopRoof.rise);
+const gableMaterial = new T.MeshToonMaterial({ color: '#766054', gradientMap: ramp, side: T.DoubleSide });
+for (const x of [X(-.002), X(7.39)]) {
+  const gable = direct(shaped([[-3.0, 0], [0, 1.18], [3.0, 0]]), gableMaterial, x, Y(5.819), shopRoof.cz);
+  gable.rotation.y = Math.PI / 2;
+}
+for (let x = -.22; x < 7.73; x += .34) woodBox(x, 5.823, .359, .074, .107, .496, timber[0], { rx: .047 });
+for (const x of [.055, 7.35]) woodBox(x, 5.93, -2.951, .156, .124, 6.16, timber[2]);
+
+// 门廊和站前小巷的生活陈设。
+bookcase(6.29, 2.365, 2.34, 1.88, 1.04, 2);
+cube(6.29, 3.449, 2.34, 1.99, .074, .64, timber[0], { edge: true });
+sign('一冊 百円', '', .59, .175, 6.48, 3.198, 2.637, { bg: '#cfad79', fg: '#744d41', border: false });
+for (let i = 0; i < 3; i++) cube(5.97, 3.519 + i * .050, 2.28, .50 - i * .047, .044, .32, books[i + 5], { ry: rand(-.12, .13) });
+const post = { x: 7.84, y: 2.37, z: 2.79 };
+disk(post.x, post.y + .04, post.z, .232, .086, stone[2]);
+disk(post.x, post.y + .276, post.z, .106, .46, crimson);
+disk(post.x, post.y + .55, post.z, .335, .078, crimson);
+disk(post.x, post.y + .919, post.z, .304, .746, crimson);
+orb(post.x, post.y + 1.29, post.z, .322, .103, .322, crimson);
+cube(post.x, post.y + 1.104, post.z + .283, .434, .121, .105, rust, { edge: true });
+cube(post.x, post.y + 1.107, post.z + .340, .356, .046, .015, soot);
+sign('〒', '郵便', .278, .31, post.x, post.y + .863, post.z + .313, { bg: '#b4493b', fg: '#efc695', border: false });
+sign('山の湯', '', .205, .23, post.x + .205, post.y + .861, post.z + .236, { bg: '#b09273', fg: '#786854', ry: .71 });
+for (let i = 0; i < 9; i++) {
+  const a = rand(-1, 1), x = post.x + Math.sin(a) * .304, z = post.z + Math.cos(a) * .307;
+  cube(x, post.y + rand(.60, 1.26), z, rand(.016, .049), .010, .008, paint('#c66f57'), { ry: a, shadow: false });
+}
+
+function vehicleFrame(ox, oy, oz, angle) {
+  const c = Math.cos(angle), s = Math.sin(angle);
+  const at = (x, y, z) => [ox + x * c + z * s, oy + y, oz - x * s + z * c];
+  return {
+    at,
+    box: (x, y, z, w, h, d, m, opts = {}) => cube(...at(x, y, z), w, h, d, m, { ...opts, ry: angle }),
+    ball: (x, y, z, w, h, d, m) => place(geo.ball, m, ...at(x, y, z), w, h, d, 0, angle),
+    hoop: (x, y, z, r, size, m) => ring(...at(x, y, z), r, size, m, 0, angle, 28),
+    line: (a, b, r, m) => stick(at(...a), at(...b), r, m)
+  };
+}
+function bicycle(x, y, z) {
+  const f = vehicleFrame(x, y, z, 1.48), framePaint = paint('#547970');
+  for (const wheel of [-.625, .625]) {
+    f.hoop(wheel, .357, 0, .323, .035, soot);
+    f.hoop(wheel, .357, 0, .286, .012, steel);
+    f.ball(wheel, .357, .004, .047, .047, .039, gold);
+    for (let i = 0; i < 13; i++) {
+      const a = i / 13 * TAU;
+      f.line([wheel, .357, 0], [wheel + Math.cos(a) * .286, .357 + Math.sin(a) * .286, 0], .0045, steel);
+    }
+    const mudguard = Array.from({ length: 10 }, (_, i) => {
+      const a = .37 + i * (Math.PI - .74) / 9;
+      return f.at(wheel + Math.cos(a) * .369, .357 + Math.sin(a) * .369, 0);
+    });
+    tube(mudguard, .026, framePaint, model, true, 18);
+  }
+  const nodes = [[-.625, .357, 0], [-.20, .397, 0], [-.33, .949, 0], [.41, .933, 0], [.625, .357, 0]];
+  for (const [a, b] of [[0, 1], [0, 2], [1, 2], [1, 3], [2, 3], [3, 4]]) f.line(nodes[a], nodes[b], .022, framePaint);
+  f.line([-.33, .949, 0], [-.36, 1.081, 0], .019, steel);
+  f.box(-.397, 1.085, 0, .343, .072, .166, soot, { edge: true });
+  f.line([.41, .933, 0], [.451, 1.199, 0], .018, steel);
+  f.line([.451, 1.199, -.205], [.451, 1.199, .205], .016, steel);
+  f.line([.451, 1.199, -.21], [.35, 1.202, -.27], .018, soot);
+  f.line([.451, 1.199, .21], [.35, 1.202, .27], .018, soot);
+  f.hoop(-.196, .397, .034, .090, .012, steel);
+  f.line([-.196, .397, .034], [-.107, .325, .169], .012, steel);
+  f.box(-.101, .326, .166, .12, .024, .061, soot);
+  f.line([-.37, .405, .05], [-.54, .021, .238], .012, steel);
+  for (const a of [-.202, .202]) {
+    for (const b of [.912, 1.145]) f.line([.495, b, a], [.905, b, a], .015, rust);
+    for (let i = 0; i <= 5; i++) f.line([.504 + i * .079, .918, a], [.504 + i * .079, 1.149, a], .009, rust);
+  }
+  for (const a of [.507, .904]) for (let i = 0; i <= 4; i++) {
+    const z = -.20 + i * .10;
+    f.line([a, .914, z], [a, 1.142, z], .009, rust);
+  }
+  f.box(.700, 1.077, 0, .277, .327, .29, paper, { edge: true });
+  f.box(.701, 1.245, 0, .282, .052, .288, cardboard, { rz: .067 });
+}
+bicycle(8.20, 2.33, -.35);
+
+function scooter(x, y, z) {
+  const f = vehicleFrame(x, y, z, -.30), body = paint('#93aea0');
+  for (const wheel of [-.48, .52]) {
+    f.hoop(wheel, .251, 0, .192, .052, soot);
+    f.ball(wheel, .249, 0, .141, .143, .086, steel);
+    f.ball(wheel + .027, .360, 0, .253, .111, .170, body);
+  }
+  f.box(-.01, .302, 0, .84, .126, .327, jade, { edge: true });
+  f.ball(-.25, .495, 0, .390, .255, .214, body);
+  f.box(-.247, .726, 0, .47, .094, .291, soot, { rx: .05, edge: true });
+  f.box(.322, .611, 0, .163, .567, .30, body, { rz: .18, edge: true });
+  f.line([.481, .253, 0], [.396, 1.047, 0], .042, jade);
+  f.line([.401, 1.003, -.25], [.401, 1.003, .25], .033, soot);
+  f.ball(.458, .928, 0, .11, .111, .114, gold);
+  f.ball(.529, .927, 0, .041, .081, .085, litPaper);
+  f.ball(-.599, .550, 0, .04, .062, .101, crimson);
+  f.line([.40, 1.01, -.17], [.35, 1.24, -.245], .012, steel);
+  f.ball(.35, 1.25, -.246, .069, .044, .030, steel);
+  f.line([-.187, .298, .080], [-.277, .026, .264], .021, steel);
+  f.box(.348, .720, .262, .205, .284, .153, paper, { rz: -.063, edge: true });
+  tube([[.273, .831, .263], [.284, .989, .263], [.406, 1.007, .263], [.435, .837, .263]].map(p => f.at(...p)), .007, timber[2]);
+  sign('コロッケ', '', .175, .077, ...f.at(.351, .744, .345), { bg: '#d8b78b', fg: '#885a45', ry: -.30, border: false });
+}
+scooter(2.00, 2.374, 2.68);
+
+const vx = 8.34, vy = 2.337, vz = -3.52;
+cube(vx, vy + .736, vz, .812, 1.472, .624, jade, { edge: true });
+cube(vx, vy + .961, vz + .326, .605, .605, .048, soot);
+for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) {
+  const x = vx - .205 + i * .19, y = vy + .827 + j * .23;
+  disk(x, y, vz + .355, .042, .136, books[(i + j * 3) % books.length]);
+  cube(x, y - .085, vz + .375, .102, .019, .022, litPaper);
+}
+cube(vx + .267, vy + .481, vz + .326, .104, .198, .042, soot);
+cube(vx + .266, vy + .532, vz + .350, .078, .028, .018, litPaper);
+cube(vx - .063, vy + .217, vz + .330, .454, .102, .027, soot, { edge: true });
+const clothTan = new T.MeshToonMaterial({ color: '#a8a18d', gradientMap: ramp, side: T.DoubleSide });
+const dustCover = flexSheet(.644, .93, vx - .12, vy + 1.039, vz + .363, clothTan, (x, y, t) => {
+  return .026 * Math.sin(x * 28) + clamp(.5 - y / .93, 0, 1) * Math.sin(t * .89 + x * 9) * .029 * motion;
+});
+dustCover.rotation.z = -.10;
+cube(vx, vy + 1.485, vz, .913, .039, .713, paint('#aca18a'), { edge: true });
+for (let row = 0; row < 3; row++) {
+  const x = 8.06 + row * .016, y = 2.393 + row * .131, z = -2.70 + rand(-.04, .04);
+  cube(x, y, z, .552, .11, .408, pale, { ry: rand(-.077, .077), edge: true });
+  for (let i = 0; i < 4; i++) cube(x, y - .038 + i * .025, z + .206, .542, .006, .008, cardboard, { shadow: false });
+  cube(x - .12, y, z, .019, .118, .416, timber[2]);
+  cube(x, y, z + .036, .565, .118, .017, timber[2]);
+}
+sign('夕刊', '', .20, .085, 8.17, 2.711, -2.61, { bg: '#e3cfab', fg: '#746659', rx: -Math.PI / 2 });
+for (const z of [-1.93, -1.44]) stick([8.22, 2.34, z], [7.79, 4.35, z], .067, timber[3], .058);
+for (let i = 0; i < 7; i++) {
+  const y = 2.51 + i * .26, x = lerp(8.22, 7.79, (y - 2.34) / 2.01);
+  stick([x, y, -1.95], [x, y, -1.43], .041, timber[2], .052);
+}
+cube(7.849, 3.80, .94, .134, .397, .298, rust, { edge: true });
+cube(7.931, 3.895, .94, .026, .038, .206, soot);
+sign('山吹', '', .213, .129, 7.947, 3.760, .94, { bg: '#97725a', fg: '#ddd0b2', ry: Math.PI / 2 });
+
+function flowerpot(x, y, z, scale, yellow) {
+  taper(x, y + .144 * scale, z, .119 * scale, 1.44, .288 * scale, terracotta, 12);
+  disk(x, y + .300 * scale, z, .180 * scale, .060 * scale, terracotta);
+  disk(x, y + .335 * scale, z, .149 * scale, .014 * scale, earth[1]);
+  const petals = paint(yellow ? '#dda349' : '#cb8a9e');
+  for (let i = 0; i < 6; i++) {
+    const a = i * 2.399, r = rand(.063, .188) * scale;
+    const xx = x + Math.cos(a) * r, zz = z + Math.sin(a) * r, yy = y + rand(.53, .82) * scale;
+    stick([x, y + .33 * scale, z], [xx, yy, zz], .008 * scale, moss[0]);
+    place(geo.ball, moss[i % 4], lerp(x, xx, .79), lerp(y + .33 * scale, yy, .48), lerp(z, zz, .79), .069 * scale, .014 * scale, .024 * scale, 0, a, .3);
+    const count = yellow ? 8 : 5;
+    for (let j = 0; j < count; j++) {
+      const θ = j * TAU / count;
+      place(geo.ball, petals, xx + Math.cos(θ) * .051 * scale, yy, zz + Math.sin(θ) * .051 * scale, .043 * scale, .014 * scale, .022 * scale, 0, -θ, 0, false);
+    }
+    orb(xx, yy + .012 * scale, zz, .023 * scale, .016 * scale, .023 * scale, gold, false, false);
+  }
+}
+flowerpot(3.77, 2.374, 2.90, .88, true);
+flowerpot(4.18, 2.374, 2.91, .68, false);
+flowerpot(8.15, 2.37, 2.03, .79, true);
+flowerpot(8.66, 2.344, .67, .68, false);
+flowerpot(-4.2, .979, 5.57, .74, true);
+flowerpot(-10.89, .98, 4.40, .57, false);
+
+const lampX = -.26, lampY = 2.29, lampZ = 3.045;
+disk(lampX, lampY + .052, lampZ, .16, .13, stone[0]);
+taper(lampX, lampY + .265, lampZ, .111, .70, .392, soot);
+stick([lampX, lampY + .38, lampZ], [lampX, lampY + 2.82, lampZ], .045, soot);
+tube([[lampX, lampY + 2.43, lampZ], [lampX, lampY + 2.92, lampZ], [lampX + .31, lampY + 3.06, lampZ],
+  [lampX + .55, lampY + 2.80, lampZ]], .039, soot);
+tube([[lampX, lampY + 2.31, lampZ + .018], [lampX + .26, lampY + 2.61, lampZ + .018],
+  [lampX + .48, lampY + 2.619, lampZ + .018], [lampX + .55, lampY + 2.79, lampZ + .018]], .022, soot);
+taper(lampX + .55, lampY + 2.744, lampZ, .227, .28, .175, soot, 8);
+taper(lampX + .55, lampY + 2.504, lampZ, .113, 1.52, .31, litPaper, 8);
+disk(lampX + .55, lampY + 2.34, lampZ, .144, .052, soot);
+for (const a of [.2, 2.294, 4.389]) stick([lampX + .55 + .110 * Math.cos(a), lampY + 2.35, lampZ + .11 * Math.sin(a)],
+  [lampX + .55 + .171 * Math.cos(a), lampY + 2.66, lampZ + .171 * Math.sin(a)], .012, soot);
+practical(lampX + .55, lampY + 2.49, lampZ + .035, 1.23, 7.0, 5.3);
+
+function wetPatch(x, y, z, width, depth, reds) {
+  const base = [[-.55, -.21], [-.36, -.47], [.06, -.50], [.42, -.29], [.55, .06], [.33, .43], [-.25, .47], [-.48, .27]];
+  const make = (points, material, offset) => {
+    const m = direct(shaped(points), material, x, y + offset, z, model, false);
+    m.rotation.x = -Math.PI / 2;
+    m.scale.set(width, depth, 1);
+    return m;
+  };
+  make(base, new T.MeshPhongMaterial({ color: '#626e83', specular: '#ffcf96', shininess: 98, transparent: true,
+    opacity: .60, side: T.DoubleSide, depthWrite: false }), 0);
+  const palette = reds ? ['#b86a56', '#d59c60', '#58657e', '#e5b476', '#866c75'] : ['#b99e7e', '#72808e', '#7e717f', '#d6b581'];
+  const materials = palette.map(color => new T.MeshBasicMaterial({ color, transparent: true, opacity: .64, depthWrite: false, side: T.DoubleSide }));
+  for (let i = 0; i < 11; i++) {
+    const cx = rand(-.33, .27), cy = rand(-.31, .29), w = rand(.05, .17), d = rand(.021, .10);
+    const m = make([[cx, cy], [cx + w, cy - d * .23], [cx + w * .86, cy + d * .66], [cx + w * .24, cy + d]], choose(materials), .004 + i * .0001);
+    m.renderOrder = 2;
+  }
+}
+wetPatch(7.52, 2.358, 2.89, 1.17, .58, true);
+wetPatch(4.88, 2.356, 2.71, 1.20, .67, true);
+wetPatch(-1.81, grade(2.015) + .049, 2.015, 1.19, .337, false);
+wetPatch(-5.06, .978, 5.62, 1.07, .37, false);
+wetPatch(-11.16, .127, 11.04, .97, .56, false);
+
+// 地藏像与苔石立在底座前角。
+const jx = -10.55, jy = .123, jz = 10.98;
+cube(jx, jy + .091, jz, .80, .176, .710, stone[0], { edge: true });
+cube(jx, jy + .216, jz, .65, .124, .56, stone[2]);
+taper(jx, jy + .518, jz, .279, .60, .53, stone[1], 9);
+orb(jx, jy + .929, jz - .019, .204, .226, .192, stone[3], true);
+orb(jx - .142, jy + .586, jz + .109, .067, .132, .077, stone[2], true);
+orb(jx + .139, jy + .579, jz + .108, .071, .133, .078, stone[2], true);
+const bib = direct(shaped([[-.16, .09], [.15, .09], [.13, -.118], [-.13, -.13]]), crimson, jx, jy + .669, jz + .178);
+bib.rotation.x = .21;
+for (const x of [-.076, .076]) tube([[jx + x - .031, jy + .948, jz + .155], [jx + x, jy + .935, jz + .168], [jx + x + .027, jy + .946, jz + .154]], .006, earth[1], model, false, 7);
+orb(jx, jy + .902, jz + .173, .022, .030, .016, stone[2]);
+sign('旅の無事', '', .49, .115, jx, jy + .205, jz + .283, { bg: '#8f8a7c', fg: '#746c62', border: false });
+for (let i = 0; i < 46; i++) {
+  const x = rand(-11.73, 7.93), z = rand(9.96, 11.87), s = rand(.073, .32);
+  place(geo.rock, choose(stone), x, .142 + s * .19, z, s * 1.22, s * .61, s, .15, rand(0, TAU), rand(-.35, .35));
+  if (i % 2 === 0) orb(x + .01, .142 + s * .66, z, s * .76, s * .19, s * .60, choose(moss), true, false);
+}
+flowerpot(-11.17, .13, 11.44, .34, true);
+
+// 绿灯、黄灯的转换带有短暂的交接亮度变化。
+const sx = 5.20, sy = .122, sz = 10.32;
+cube(sx, sy + .092, sz, .53, .182, .54, stone[0], { edge: true });
+stick([sx, sy + .14, sz], [sx, sy + 2.90, sz], .066, soot);
+cube(sx, sy + 2.63, sz, .453, .974, .265, soot, { edge: true });
+const signalBulbs = [new T.MeshStandardMaterial({ color: '#69bd9d', emissive: '#40e5a2', emissiveIntensity: 1.8, roughness: .245 }),
+  new T.MeshStandardMaterial({ color: '#a18140', emissive: '#ffc460', emissiveIntensity: .16, roughness: .245 })];
+const signalGlows = [];
+for (let i = 0; i < 2; i++) {
+  const y = sy + 2.857 - i * .446;
+  ring(sx, y, sz + .149, .151, .026, tileDark);
+  orb(sx, y, sz + .159, .124, .125, .062, signalBulbs[i]);
+  const hoodPoints = Array.from({ length: 13 }, (_, j) => {
+    const a = -.19 + j / 12 * (Math.PI + .38);
+    return [sx + .176 * Math.cos(a), y + .17 * Math.sin(a), sz + .219 + Math.sin(a) * .070];
+  });
+  tube(hoodPoints, .036, soot, model, true, 16);
+  cube(sx, y + .171, sz + .213, .245, .055, .270, soot, { rx: -.12 });
+  signalGlows.push(halo(sx, y, sz + .275, .69, 0, i ? '#ffd162' : '#91ffd2'));
+}
+clockwork.push(t => {
+  const phase = t % 28;
+  const yellow = smoothstep(phase, 17.2, 18.2) * (1 - smoothstep(phase, 26.4, 27.46));
+  signalBulbs[0].emissiveIntensity = .14 + (1 - yellow) * 2.03;
+  signalBulbs[1].emissiveIntensity = .095 + yellow * 1.87;
+  signalGlows[0].material.opacity = (1 - yellow) * .48;
+  signalGlows[1].material.opacity = yellow * .45;
+});
+sign('2', '', .19, .203, sx, sy + 1.926, sz + .075, { bg: '#e3d2a7', fg: '#51484b' });
+stick([-3.69, .12, 9.89], [-3.69, 1.67, 9.89], .033, rust);
+cube(-3.69, 1.639, 9.89, .55, .536, .067, soot, { edge: true });
+sign('25', '', .473, .462, -3.69, 1.639, 9.93, { bg: '#e1d5af', fg: '#414651' });
+
+// 林间鸟居与被山风吹动的红枫、银杏。
+const gateX = stairX(-10.26), gateY = grade(-10.26) + .035, gateZ = -10.26;
+const gateRed = paint('#9b5241'), gateWood = paint('#704640');
+for (const side of [-1, 1]) {
+  const x = gateX + side * 1.29;
+  cube(x, gateY + .079, gateZ, .512, .15, .479, stone[1], { edge: true });
+  taper(x - side * .078, gateY + 1.37, gateZ, .176, .80, 2.64, gateRed, 10, 0, 0, side * .057);
+  disk(x, gateY + .267, gateZ, .187, .23, gateWood);
+}
+cube(gateX, gateY + 2.231, gateZ, 3.44, .166, .291, gateRed, { edge: true });
+cube(gateX, gateY + 2.46, gateZ, .224, .51, .261, gateWood, { edge: true });
+const toriiTop = new T.Shape([new T.Vector2(-1.98, 2.892), new T.Vector2(-1.91, 2.647), new T.Vector2(-.92, 2.586),
+  new T.Vector2(.92, 2.586), new T.Vector2(1.91, 2.647), new T.Vector2(1.98, 2.892), new T.Vector2(.99, 2.794), new T.Vector2(-.99, 2.794)]);
+direct(new T.ExtrudeGeometry(toriiTop, { depth: .42, bevelEnabled: true, bevelSize: .027, bevelThickness: .026, bevelSegments: 1 }), gateWood, gateX, gateY, gateZ - .22);
+for (const dz of [-.238, .237]) tube([[gateX - 1.98, gateY + 2.909, gateZ + dz], [gateX - 1.04, gateY + 2.815, gateZ + dz],
+  [gateX, gateY + 2.817, gateZ + dz], [gateX + 1.04, gateY + 2.815, gateZ + dz], [gateX + 1.98, gateY + 2.909, gateZ + dz]], .052, tileDark);
+sign('山神', '', .18, .37, gateX, gateY + 2.494, gateZ + .142, { vertical: true, bg: '#ab805c', fg: '#5f423f' });
+tube([[gateX - 1.21, gateY + 2.052, gateZ + .143], [gateX - .63, gateY + 1.895, gateZ + .182],
+  [gateX, gateY + 1.834, gateZ + .192], [gateX + .63, gateY + 1.901, gateZ + .181], [gateX + 1.21, gateY + 2.057, gateZ + .145]], .025, gold);
+for (let i = 0; i < 5; i++) {
+  const x = gateX + (i - 2) * .351, y = gateY + 1.826 + Math.abs(i - 2) * .029;
+  direct(shaped([[.02, .02], [.114, -.067], [.036, -.131], [.117, -.20], [.041, -.302], [-.026, -.225], [.035, -.16], [-.042, -.093]]),
+    new T.MeshToonMaterial({ color: '#dac292', gradientMap: ramp, side: T.DoubleSide }), x, y, gateZ + .198, model, false);
+}
+function stoneLantern(x, z, scale) {
+  const y = terrainY(x, z), s = scale;
+  cube(x, y + .061 * s, z, .62 * s, .121 * s, .62 * s, stone[1]);
+  taper(x, y + .429 * s, z, .189 * s, .68, .63 * s, stone[0], 8);
+  cube(x, y + .781 * s, z, .468 * s, .149 * s, .468 * s, stone[2], { edge: true });
+  cube(x, y + .980 * s, z, .319 * s, .251 * s, .323 * s, stone[1]);
+  cube(x, y + .975 * s, z + .165 * s, .117 * s, .116 * s, .012 * s, soot);
+  taper(x, y + 1.194 * s, z, .404 * s, .20, .210 * s, stone[0], 4, 0, Math.PI / 4);
+  orb(x, y + 1.33 * s, z, .068 * s, .100 * s, .071 * s, stone[1], true);
+  for (let i = 0; i < 7; i++) orb(x + rand(-.27, .27) * s, y + .137 * s, z + rand(-.27, .27) * s, .062 * s, .020 * s, .055 * s, choose(moss), true, false);
+}
+stoneLantern(-7.09, -8.52, 1.0);
+stoneLantern(-3.53, -9.06, .85);
+
+const forest = [];
+function autumnTree(x, z, height, radius, kind) {
+  const ground = terrainY(x, z), crownY = ground + height * .73;
+  const branch = kind ? paint('#82705a') : barkDark;
+  const forks = [[x, ground - .13, z], [x + .043, ground + height * .32, z - .06],
+    [x - .13, ground + height * .57, z - .05], [x + .08, crownY, z + .02]];
+  for (let i = 0; i < forks.length - 1; i++) stick(forks[i], forks[i + 1], [.21, .157, .123][i] * (height / 5), branch);
+  for (let i = 0; i < 7; i++) {
+    const a = i * 2.39, length = rand(.35, .81);
+    tube([[x, ground + .20, z], [x + Math.cos(a) * length * .56, ground + .06, z + Math.sin(a) * length * .56],
+      [x + Math.cos(a) * length, ground + .014, z + Math.sin(a) * length]], rand(.032, .058), branch, model, false, 7);
+  }
+  for (let i = 0; i < 12; i++) {
+    const a = rand(0, TAU), h = ground + rand(.2, .59) * height, lean = rand(.018, .043);
+    const p = [x + Math.cos(a) * .167, h, z + Math.sin(a) * .164];
+    tube([p, [p[0] + lean, p[1] + rand(.29, .63), p[2] + .023], [p[0], p[1] + rand(.67, 1.04), p[2]]], .014, timber[0], model, false, 6);
+  }
+  const crown = group(x, crownY, z);
+  const palette = kind ? [4, 5, 4, 6, 5, 3] : [0, 1, 2, 3, 1, 2, 7];
+  const puffStages = [], colorGroups = new Map();
+  const clusterCount = kind ? 12 : 15;
+  for (let i = 0; i < clusterCount; i++) {
+    const a = i * 2.399 + rand(-.24, .24), t = Math.sqrt((i + .16) / clusterCount);
+    const reach = radius * t * rand(.65, .95);
+    const dx = Math.cos(a) * reach, dz = Math.sin(a) * reach * .88;
+    const dy = (1 - t * .89) * height * (kind ? .32 : .25) + rand(-.19, .36);
+    const size = (kind ? .34 : .39) * radius * rand(.76, 1.21);
+    const hue = palette[Math.floor(rand(0, palette.length))];
+    puffStages.push({ dx, dy, dz, size, hue });
+    if (i < 8) {
+      tube([[0, -.25 - height * .058, 0], [dx * .46, dy * .24 - .11, dz * .51], [dx, dy, dz]], rand(.030, .056), branch, crown, true, 9);
+    }
+    const lump = direct(geo.rock, leaves[hue], dx, dy, dz, crown);
+    lump.scale.set(size * rand(.91, 1.26), size * rand(.53, .80), size * rand(.81, 1.13));
+    lump.rotation.set(rand(-.34, .34), rand(0, TAU), rand(-.31, .31));
+  }
+  for (let i = 0; i < 350; i++) {
+    const p = choose(puffStages), a = rand(0, TAU), dist = Math.sqrt(rand()) * p.size * 1.35;
+    const hue = i % 3 ? p.hue : choose(palette);
+    const dx = p.dx + Math.cos(a) * dist, dz = p.dz + Math.sin(a) * dist;
+    const dy = p.dy + rand(-.46, .82) * p.size * Math.sqrt(Math.max(.17, 1 - (dist / (p.size * 1.55)) ** 2));
+    const s = rand(.117, .251) * (radius / 2.1) ** .56;
+    const key = `${hue}/${i % 4 === 0}`;
+    if (!colorGroups.has(key)) colorGroups.set(key, { hue, faceted: i % 4 === 0, transforms: [] });
+    colorGroups.get(key).transforms.push(matrix(dx, dy, dz, s, s * rand(.68, 1.2), s,
+      rand(-1.36, 1.36), rand(0, TAU), rand(0, TAU)));
+  }
+  for (const { hue, faceted, transforms } of colorGroups.values()) {
+    const batch = new T.InstancedMesh(faceted ? geo.gem : leafGeo[kind], leaves[hue], transforms.length);
+    transforms.forEach((m, i) => batch.setMatrixAt(i, m));
+    batch.instanceMatrix.needsUpdate = true;
+    batch.receiveShadow = true;
+    batch.computeBoundingSphere();
+    crown.add(batch);
+  }
+  forest.push({ x, z, y: crownY + height * .24, radius, kind });
+  const phase = rand(0, TAU);
+  clockwork.push(t => {
+    crown.rotation.z = (Math.sin(t * .74 + phase) * .015 + Math.sin(t * 1.42 + phase) * .007) * motion;
+    crown.rotation.x = Math.cos(t * .47 + phase) * .012 * motion;
+  });
+}
+autumnTree(-9.65, -4.80, 5.88, 2.4, 0);
+autumnTree(-9.55, -9.22, 5.30, 2.30, 0);
+autumnTree(-8.30, -11.0, 6.00, 1.99, 1);
+autumnTree(-2.68, -10.98, 5.58, 2.16, 0);
+autumnTree(.06, -10.36, 5.95, 2.17, 1);
+autumnTree(3.73, -11.00, 5.39, 2.38, 0);
+autumnTree(7.98, -9.96, 6.65, 2.42, 1);
+autumnTree(10.08, -6.48, 5.22, 1.82, 0);
+autumnTree(-10.42, 2.11, 3.42, 1.47, 1);
+autumnTree(-11.02, 11.58, 2.67, .77, 0);
+
+function roofY(x, z) {
+  const gable = (x - shopRoof.cx) / (shopRoof.w / 2), down = Math.abs(z - shopRoof.cz) / (shopRoof.d / 2);
+  return Math.abs(gable) <= 1 && down <= 1 ? roofHeight(shopRoof.eave, shopRoof.rise, down, gable) + .085 : -Infinity;
+}
+function restingHeight(x, z) {
+  let y = terrainY(x, z);
+  if (z > 3.38 && z < 6.24 && x < bankX) y = Math.max(y, .983);
+  if (Math.abs(z - railZ(x)) < 1.47) y = Math.max(y, .302);
+  if (Math.abs(x - stairX(z)) < 1.30 && z > -10.89 && z < 4.55) y = Math.max(y, grade(Math.round((z - 4.27) / .451) * .451 + 4.27) + .052);
+  if (x > .15 && x < 8.0 && z > 1.55 && z < 3.08) y = Math.max(y, 2.355);
+  if (x > bankX && z > sourceZ) y = Math.abs(z - railZ(x)) < 1.21 ? .427 : .100;
+  const catwalk = x > -12.08 && x < -4.18 && z > 2.91 && z < 6.455;
+  if (catwalk) y = Math.max(y, roofHeight(3.57, .48, Math.abs(z - 4.68) / 1.775, (x + 8.13) / 3.95) + .054);
+  return Math.max(y, roofY(x, z));
+}
+for (let i = 0; i < 1050; i++) {
+  const tree = choose(forest), x = clamp(tree.x + rand(-3.65, 3.65), -11.95, 11.94), z = clamp(tree.z + rand(-3.07, 4.63), -11.95, 11.94);
+  if (x > bankX && z > sourceZ) continue;
+  const h = restingHeight(x, z), size = rand(.064, .164);
+  const material = choose(tree.kind ? leaves.slice(4, 7) : leaves.slice(0, 4));
+  place(leafGeo[tree.kind], material, x, h + .012, z, size, size, size, -Math.PI / 2, 0, rand(0, TAU), false);
+}
+const blade = shaped([[-.048, 0], [-.022, .15], [.069, .33], [.035, .14], [.041, 0]]);
+const foliageMats = ['#7a835d', '#64775f', '#a39a69', '#a89467'].map(color => new T.MeshToonMaterial({ color, gradientMap: ramp, side: T.DoubleSide }));
+for (let i = 0; i < 430; i++) {
+  const x = rand(-11.92, 11.87), z = rand(-11.89, 11.91);
+  if ((z > 3.15 && z < 9.85) || (x > bankX && z > sourceZ) || (x > -.15 && x < 8.8 && z > -4.98 && z < 3.13) ||
+      (Math.abs(x - stairX(z)) < 1.45 && z > -10.9 && z < 4.6)) continue;
+  const y = terrainY(x, z) - .006;
+  for (let j = 0; j < 2 + i % 3; j++) {
+    const s = rand(.47, 1.23);
+    place(blade, choose(foliageMats), x + rand(-.11, .11), y, z + rand(-.11, .11), s, s, s, rand(-.34, .34), rand(0, TAU), rand(-.21, .24), false);
+  }
+  if (i % 7 === 0) orb(x, y + .035, z, rand(.10, .27), rand(.06, .16), rand(.11, .26), choose(stone), true, false);
+}
+
+// 日落方向的三股架空线与停在瓷瓶附近的小鸟。
+function pole(x, z, height) {
+  const y = terrainY(x, z);
+  taper(x, y + height / 2, z, .133, .60, height, timber[1], 11);
+  cube(x, y + .272, z, .246, .545, .248, stone[0], { edge: true });
+  cube(x, y + height - .253, z, 1.94, .112, .121, timber[0], { edge: true });
+  stick([x, y + height - .624, z], [x - .67, y + height - .250, z], .041, timber[0], .051);
+  stick([x, y + height - .624, z], [x + .67, y + height - .250, z], .041, timber[0], .051);
+  for (const dx of [-.74, 0, .74]) {
+    stick([x + dx, y + height - .250, z], [x + dx, y + height + .097, z], .022, steel);
+    for (let i = 0; i < 3; i++) disk(x + dx, y + height - .071 + i * .069, z, .060, .035, pale);
+  }
+  for (let i = 0; i < 7; i++) cube(x, y + 1.02 + i * .43, z + .12, .317, .028, .058, rust);
+  return [x, y + height + .088, z];
+}
+const leftPole = pole(-11.04, 2.52, 7.04), rightPole = pole(8.66, 3.88, 9.81);
+const cable = [];
+for (const off of [-.74, 0, .74]) {
+  const a = v(leftPole[0] + off, leftPole[1], leftPole[2]);
+  const b = v(rightPole[0] + off, rightPole[1], rightPole[2]);
+  const sag = a.clone().lerp(b, .51);
+  sag.y -= 1.22 + off * .16;
+  sag.z += .037 + off * .1;
+  const curve = new T.CatmullRomCurve3([a, sag, b]);
+  cable.push(curve);
+  direct(new T.TubeGeometry(curve, 47, .014, 4, false), soot, 0, 0, 0, model, false);
+}
+tube([[8.66, rightPole[1] - .39, 3.88], [8.056, 8.30, 1.12], [7.799, 7.81, -.59], [7.779, 7.78, -.83]], .012, soot, model, false, 28);
+for (let i = 0; i < 4; i++) {
+  const p = cable[i % 3].getPoint(.27 + i * .105), bird = group(p.x, p.y + .085, p.z);
+  const feathers = paint('#4e4651'), breast = paint(i % 2 ? '#6b5a60' : '#70646a');
+  direct(geo.ball, feathers, 0, .044, 0, bird, false).scale.set(.101, .106, .138);
+  direct(geo.ball, breast, 0, .037, .066, bird, false).scale.set(.071, .073, .083);
+  direct(geo.ball, feathers, 0, .137, .075, bird, false).scale.set(.069, .073, .070);
+  const beak = direct(taperGeometry(.05, 6), gold, 0, .132, .160, bird, false);
+  beak.scale.set(.031, .061, .032);
+  beak.rotation.x = Math.PI / 2;
+  const tail = direct(geo.box, feathers, 0, .005, -.141, bird, false);
+  tail.scale.set(.063, .028, .146); tail.rotation.x = -.25;
+  for (const s of [-1, 1]) {
+    direct(geo.ball, soot, s * .054, .160, .112, bird, false).scale.set(.011, .011, .011);
+    direct(geo.cyl, rust, s * .033, -.064, .014, bird, false).scale.set(.008, .065, .008);
+  }
+  bird.rotation.y = -.5 + i * .51;
+  clockwork.push(t => {
+    bird.rotation.z = Math.sin(t * .74 + i * 1.1) * .041 * motion;
+    bird.rotation.x = Math.sin(t * .46 + i * .76) * .031 * motion;
+    tail.rotation.x = -.25 + Math.sin(t * .78 + i) * .10 * motion;
+  });
+}
+
+// 飘落的叶片接触瓦片、枕木和溪流后短暂停留或顺水滑行。
+for (const kind of [0, 1]) {
+  const sources = forest.filter(tree => tree.kind === kind), count = kind ? 18 : 28;
+  const inst = new T.InstancedMesh(leafGeo[kind], leaves[kind ? 5 : 2], count);
+  inst.frustumCulled = false;
+  inst.instanceMatrix.setUsage(T.DynamicDrawUsage);
+  model.add(inst);
+  const particles = Array.from({ length: count }, (_, i) => ({
+    start: -rand(0, 24) + i / count, duration: rand(12.8, 22.1), source: choose(sources),
+    phase: rand(0, TAU), dx: rand(-2.8, 2.8), dz: rand(.4, 6.6), size: rand(.12, .218)
+  }));
+  clockwork.push(t => {
+    for (let i = 0; i < count; i++) {
+      const p = particles[i];
+      let age = t - p.start;
+      if (age > p.duration + 3.5) {
+        p.start = t + rand(.08, 2.3);
+        p.source = choose(sources);
+        age = t - p.start;
+      }
+      const q = clamp(age / p.duration, 0, 1), drift = Math.max(0, age - p.duration);
+      const wave = Math.sin(q * 8.1 + p.phase) * .51;
+      const x = clamp(p.source.x + Math.sin(p.phase) * p.source.radius * .67 + p.dx * q + wave, -11.91, 11.87);
+      let z = clamp(p.source.z + Math.cos(p.phase) * p.source.radius * .49 + p.dz * q + Math.cos(q * 5.1 + p.phase) * .36, -11.95, 11.91);
+      const downstream = x > bankX && z > sourceZ && Math.abs(z - railZ(x)) > 1.24;
+      if (downstream) z = Math.min(11.93, z + drift * .24);
+      const floor = restingHeight(x, z) + .014;
+      const src = Math.max(floor + .48, p.source.y);
+      const h = lerp(src, floor, q) + Math.sin(q * Math.PI) * Math.sin(q * 8 + p.phase) * .36;
+      const settle = smoothstep(q, .91, 1);
+      scratch.position.set(x, Math.max(floor, h), z);
+      scratch.rotation.set(lerp(p.phase + q * 9.4, -Math.PI / 2, settle), (1 - settle) * Math.sin(q * 11 + p.phase) * 1.5, p.phase + q * 7.2 + drift * .093);
+      const life = smoothstep(age, 0, .62) * (1 - smoothstep(drift, 1.8, 3.42));
+      scratch.scale.setScalar(Math.max(.0001, p.size * life));
+      scratch.updateMatrix();
+      inst.setMatrixAt(i, scratch.matrix);
+    }
+    inst.instanceMatrix.needsUpdate = true;
+  });
+}
+
+// 以柔边光束与受光尘埃表现纸页和木窗之间的金色斜阳。
+const shaftMaterial = new T.ShaderMaterial({
+  uniforms: { time }, side: T.DoubleSide, transparent: true, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false,
+  vertexShader: `varying vec2 shaftUv;void main(){shaftUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+  fragmentShader: `varying vec2 shaftUv;uniform float time;
+    void main() {
+      float spread=mix(.90,.34,shaftUv.y);
+      float inside=max(0.,1.-abs(2.*shaftUv.x-1.)/spread);
+      float veil=pow(inside,1.85)*sin(shaftUv.y*3.1415926);
+      float filament=.84+.16*sin(shaftUv.x*41.+time*.29);
+      gl_FragColor=vec4(1.,.69,.36,veil*filament*.21);
+    }`
+});
+const shaftSpecs = [
+  { start: [-.31, 5.28, 2.92], end: [4.95, 2.58, -2.96], width: 1.09 },
+  { start: [1.22, 5.23, 2.79], end: [5.32, 2.75, -1.64], width: .63 },
+  { start: [-11.21, 3.54, 6.13], end: [-6.64, 1.00, 3.73], width: .83 },
+  { start: [-2.15, 6.84, 2.06], end: [4.12, 5.68, .24], width: .43 }
+];
+for (const spec of shaftSpecs) {
+  const a = v(...spec.start), b = v(...spec.end), mid = a.clone().lerp(b, .5), dir = a.clone().sub(b);
+  const mount = group(mid.x, mid.y, mid.z);
+  const beam = direct(new T.PlaneGeometry(spec.width, dir.length()), shaftMaterial, 0, 0, 0, mount, false);
+  mount.quaternion.setFromUnitVectors(UP, dir.normalize());
+  const inverse = mount.quaternion.clone().invert();
+  const view = v(0, 0, 0);
+  beam.renderOrder = 6;
+  clockwork.push(() => {
+    view.copy(camera.position).sub(focus).applyQuaternion(inverse);
+    beam.rotation.y = Math.atan2(view.x, view.z);
+  });
+}
+const motes = Array.from({ length: 143 }, (_, i) => ({ ray: shaftSpecs[i % shaftSpecs.length], u: rand(), x: rand(-.72, .72), y: rand(-.22, .38), z: rand(-.52, .52), phase: rand(0, TAU), size: rand(.20, 1) }));
+const motePosition = new T.BufferAttribute(new Float32Array(motes.length * 3), 3).setUsage(T.DynamicDrawUsage);
+const moteGeometry = new T.BufferGeometry();
+moteGeometry.setAttribute('position', motePosition);
+moteGeometry.setAttribute('grain', new T.Float32BufferAttribute(motes.map(m => m.size), 1));
+const moteUniforms = { time, px: { value: 1 } };
+const moteMaterial = new T.ShaderMaterial({
+  uniforms: moteUniforms, transparent: true, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false,
+  vertexShader: `attribute float grain;varying float brightness;uniform float time,px;
+    void main(){brightness=(.23+grain*.49)*(.78+.22*sin(time*1.1+grain*37.));gl_PointSize=(1.2+2.7*grain)*px;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+  fragmentShader: `varying float brightness;
+    void main(){float fade=1.-smoothstep(.05,.5,length(gl_PointCoord-.5));gl_FragColor=vec4(1.,.79,.47,fade*brightness);}`
+});
+const dust = new T.Points(moteGeometry, moteMaterial);
+dust.frustumCulled = false;
+dust.renderOrder = 7;
+model.add(dust);
+clockwork.push(t => {
+  moteUniforms.px.value = Math.max(1, renderer.getPixelRatio()) * clamp(Math.sqrt(zoom), .80, 1.43);
+  motes.forEach((m, i) => {
+    const u = (m.u + t * .019) % 1, drift = Math.sin(t * .24 + m.phase) * .179;
+    const [ax, ay, az] = m.ray.start, [bx, by, bz] = m.ray.end;
+    motePosition.setXYZ(i, lerp(bx, ax, u) + m.x + drift, lerp(by, ay, u) + m.y + .06 * Math.sin(t * .5 + m.phase), lerp(bz, az, u) + m.z);
+  });
+  motePosition.needsUpdate = true;
+});
+const fogMaterial = new T.ShaderMaterial({
+  uniforms: { time }, transparent: true, depthWrite: false, side: T.DoubleSide, toneMapped: false,
+  vertexShader: `varying vec2 mistUv;void main(){mistUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
+  fragmentShader: `varying vec2 mistUv;uniform float time;
+    void main(){vec2 uv=mistUv*2.-1.;
+      uv.y+=.15*sin(uv.x*5.1+time*.087)+.07*cos(uv.x*11.-time*.12);
+      float mask=pow(max(0.,1.-uv.x*uv.x),2.5)*exp(-uv.y*uv.y*9.)*(1.-smoothstep(.62,1.0,abs(uv.y)));
+      gl_FragColor=vec4(.801,.758,.813,mask*.148);
+    }`
+});
+for (let i = 0; i < 3; i++) {
+  const mist = direct(new T.PlaneGeometry(7.2, 1.4), fogMaterial, -7.7 + i * 7.4, 5.34 + .24 * i, -10.63 + .24 * i, model, false);
+  mist.renderOrder = 5;
+  clockwork.push(t => { mist.position.x = -7.7 + i * 7.4 + .59 * Math.sin(t * .064 + i * .89); });
+}
+
+// 林后的小电车偶尔穿行，经过时才响起极轻的合成车铃。
+const railRearZ = -11.31, railRearY = 5.69;
+cube(0, railRearY - .091, railRearZ, 23.84, .17, .87, stone[0]);
+for (let i = 0; i < 55; i++) cube(-11.78 + i * .436, railRearY + .024, railRearZ, .146, .055, .70, timber[0]);
+for (const side of [-1, 1]) cube(0, railRearY + .076, railRearZ + side * .238, 23.83, .050, .042, gleam);
+const tinyTrain = group(0, railRearY + .093, railRearZ);
+const trainShell = paint('#bdaf8a'), trainStripe = paint('#597b73');
+const trainCars = [];
+for (let i = 0; i < 3; i++) {
+  const car = group(-i * 1.86, 0, 0, tinyTrain);
+  trainCars.push(car);
+  direct(geo.box, trainShell, 0, .369, 0, car).scale.set(1.719, .534, .529);
+  direct(geo.box, trainStripe, 0, .235, 0, car).scale.set(1.724, .184, .548);
+  direct(geo.box, tileDark, 0, .668, 0, car).scale.set(1.754, .117, .569);
+  direct(geo.box, soot, 0, .110, 0, car).scale.set(1.57, .08, .456);
+  for (const z of [-.268, .268]) {
+    for (let j = 0; j < 4; j++) {
+      direct(geo.box, litPaper, -.608 + j * .405, .477, z, car, false).scale.set(.267, .221, .018);
+      direct(geo.box, trainShell, -.607 + j * .405, .478, z * 1.043, car, false).scale.set(.026, .213, .016);
+    }
+    for (const x of [-.555, .555]) direct(geo.ball, soot, x, .048, z * .74, car).scale.set(.099, .096, .042);
+  }
+  if (i === 0) {
+    for (const z of [-.166, .166]) direct(geo.ball, litPaper, .866, .257, z, car, false).scale.set(.044, .060, .066);
+    halo(.90, .281, 0, .87, .63, '#ffd78c', car);
+  }
+}
+let audio, nextPass = -1;
+canvas.addEventListener('pointerdown', () => {
+  const Constructor = window.AudioContext ?? window.webkitAudioContext;
+  if (Constructor && !audio) {
+    try { audio = new Constructor(); } catch { return; }
+  }
+  if (audio?.state === 'suspended') audio.resume().catch(() => {});
+}, { passive: true });
+function distantBell() {
+  if (audio?.state !== 'running' || motion < 1) return;
+  for (let i = 0; i < 3; i++) {
+    const start = audio.currentTime + i * .61, osc = audio.createOscillator(), gain = audio.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = i % 2 ? 698 : 554;
+    gain.gain.setValueAtTime(.00001, start);
+    gain.gain.exponentialRampToValueAtTime(.012, start + .075);
+    gain.gain.exponentialRampToValueAtTime(.00001, start + .59);
+    osc.connect(gain).connect(audio.destination);
+    osc.start(start);
+    osc.stop(start + .63);
+  }
+}
+clockwork.push((t, elapsed) => {
+  const pass = elapsed % 124, cycle = Math.floor(elapsed / 124);
+  tinyTrain.visible = pass >= 42 && pass <= 63;
+  if (!tinyTrain.visible) return;
+  tinyTrain.position.x = -12 + (pass - 42) / 21 * 27.71;
+  for (const car of trainCars) {
+    const x = tinyTrain.position.x + car.position.x;
+    car.visible = x > -11.08 && x < 11.08;
+  }
+  if (nextPass !== cycle) {
+    nextPass = cycle;
+    distantBell();
+  }
+});
+clockwork.push((t, elapsed) => {
+  const evening = smoothstep(elapsed, 0, 190);
+  sun.intensity = lerp(3.05, 2.66, evening);
+  hemisphere.intensity = lerp(1.85, 1.75, evening);
+  for (const lamp of lamps) {
+    const start = 1.4 + lamp.phase * .14;
+    const rise = smoothstep(elapsed, start - .9, start + .95);
+    const stutter = Math.exp(-Math.pow((elapsed - start) / .57, 2)) * Math.sin(elapsed * 39 + lamp.phase) * .13 * motion;
+    lamp.light.intensity = lamp.power * (.64 + .36 * rise + stutter);
+    lamp.aura.material.opacity = .45 + .17 * rise + stutter * .64;
+  }
+  litPaper.emissiveIntensity = .61 + .38 * smoothstep(elapsed, 0, 4.2) + .13 * evening;
+});
+
+assembleInstances();
+resize();
+updateCamera(1);
+addEventListener('resize', resize, { passive: true });
+let elapsed = 0, lastFrame = null;
+renderer.setAnimationLoop(now => {
+  if (document.hidden) { lastFrame = null; return; }
+  const delta = lastFrame === null ? 0 : Math.min(.10, (now - lastFrame) / 1000);
+  lastFrame = now;
+  elapsed += delta;
+  time.value = elapsed * motion;
+  updateCamera(1 - Math.exp(-Math.max(delta, 1 / 240) * 14));
+  for (const tick of clockwork) tick(time.value, elapsed);
+  renderer.clear();
+  renderer.render(sky, screenCamera);
+  renderer.clearDepth();
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>

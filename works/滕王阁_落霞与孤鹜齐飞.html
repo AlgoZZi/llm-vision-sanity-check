@@ -1,0 +1,1935 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="icon" href="data:," />
+<title>滕王阁 · 落霞与孤鹜齐飞（Three.js 3D 短片）</title>
+<style>
+  :root {
+    --bg-panel: rgba(11, 14, 21, 0.72);
+    --bg-panel-hover: rgba(24, 30, 44, 0.86);
+    --border: rgba(226, 198, 150, 0.22);
+    --gold: #e6c387;
+    --gold-dim: rgba(230, 195, 135, 0.65);
+    --text: #f2ede4;
+    --text-muted: rgba(242, 237, 228, 0.62);
+    --accent: #d97642;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #07090f; color: var(--text);
+    font-family: "PingFang SC", "Microsoft YaHei", "Noto Serif SC", system-ui, -apple-system, sans-serif;
+    user-select: none; -webkit-font-smoothing: antialiased;
+  }
+  #canvas-wrap {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+  }
+  canvas { display: block; width: 100%; height: 100%; }
+
+  /* 角落信息 HUD（克制、不遮挡主体） */
+  #hud-corner {
+    position: fixed; left: 18px; top: 16px; z-index: 20;
+    background: var(--bg-panel);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    min-width: 248px;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+  }
+  .hud-top {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    margin-bottom: 4px;
+  }
+  .hud-shot-id {
+    font-size: 13px; font-weight: 600; color: var(--gold); letter-spacing: 0.06em;
+  }
+  .hud-clock {
+    font-size: 11px; color: var(--gold-dim); font-variant-numeric: tabular-nums;
+  }
+  .hud-title {
+    font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 270px;
+  }
+  .hud-meta {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums;
+  }
+  .hud-meta span b { color: var(--text); font-weight: 500; }
+  .hud-mini-bar {
+    margin-top: 7px; height: 2px; background: rgba(255,255,255,0.12); border-radius: 2px; overflow: hidden;
+  }
+  .hud-mini-fill {
+    height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent), var(--gold));
+    transition: width 0.08s linear;
+  }
+
+  /* 右上角分镜菜单展开/收起按钮 */
+  #menu-toggle {
+    position: fixed; right: 18px; top: 16px; z-index: 30;
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--bg-panel);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    color: var(--gold);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 8px 13px;
+    font-size: 12.5px; cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, transform 0.15s;
+  }
+  #menu-toggle:hover {
+    background: var(--bg-panel-hover); border-color: rgba(230, 195, 135, 0.55);
+  }
+  #menu-toggle:active { transform: scale(0.97); }
+
+  /* 右侧可折叠 27 分镜抽屉 */
+  #shot-drawer {
+    position: fixed; right: 18px; top: 60px; bottom: 84px; width: 320px; z-index: 25;
+    background: rgba(10, 13, 20, 0.84);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    transform: translateX(0); opacity: 1;
+    transition: transform 0.26s cubic-bezier(.22,1,.36,1), opacity 0.22s ease;
+  }
+  #shot-drawer.collapsed {
+    transform: translateX(calc(100% + 28px));
+    opacity: 0; pointer-events: none;
+  }
+  .drawer-header {
+    padding: 11px 14px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .drawer-header h2 {
+    font-size: 13px; font-weight: 600; color: var(--gold); letter-spacing: 0.05em;
+  }
+  .drawer-header span { font-size: 11px; color: var(--text-muted); }
+  #shot-list {
+    flex: 1; overflow-y: auto; padding: 6px;
+    scrollbar-width: thin; scrollbar-color: rgba(230,195,135,0.3) transparent;
+  }
+  #shot-list::-webkit-scrollbar { width: 5px; }
+  #shot-list::-webkit-scrollbar-thumb { background: rgba(230,195,135,0.3); border-radius: 3px; }
+  .act-divider {
+    font-size: 10.5px; color: var(--gold-dim); letter-spacing: 0.08em;
+    padding: 8px 8px 4px; border-bottom: 1px dashed rgba(230,195,135,0.14);
+    margin-bottom: 4px;
+  }
+  .shot-item {
+    width: 100%; text-align: left; background: transparent; color: var(--text);
+    border: 1px solid transparent; border-radius: 7px;
+    padding: 7px 9px; margin-bottom: 3px; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    display: block;
+  }
+  .shot-item:hover { background: rgba(255,255,255,0.06); }
+  .shot-item.active {
+    background: rgba(230, 195, 135, 0.14);
+    border-color: rgba(230, 195, 135, 0.45);
+  }
+  .shot-row1 {
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    margin-bottom: 2px;
+  }
+  .shot-num {
+    font-size: 11.5px; font-weight: 600; color: var(--gold); font-variant-numeric: tabular-nums;
+  }
+  .shot-name {
+    font-size: 12px; font-weight: 500; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .shot-time {
+    font-size: 10.5px; color: var(--text-muted); font-variant-numeric: tabular-nums;
+  }
+  .shot-row2 {
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    font-size: 10.5px; color: var(--text-muted);
+  }
+  .shot-tag {
+    display: inline-block; padding: 1px 5px; border-radius: 4px;
+    font-size: 9.5px; background: rgba(217, 118, 66, 0.22); color: #f5b994;
+    border: 1px solid rgba(217, 118, 66, 0.35);
+  }
+
+  /* 底部克制控制栏 */
+  #controls-bar {
+    position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 25;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg-panel);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 8px 14px;
+    max-width: calc(100vw - 36px);
+  }
+  .ctrl-btn {
+    background: rgba(255,255,255,0.06); color: var(--text);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 7px; padding: 6px 11px;
+    font-size: 12px; cursor: pointer; white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .ctrl-btn:hover { background: rgba(230, 195, 135, 0.16); border-color: rgba(230, 195, 135, 0.45); }
+  .ctrl-btn.primary {
+    background: rgba(230, 195, 135, 0.2); color: var(--gold); border-color: rgba(230, 195, 135, 0.5);
+    font-weight: 600;
+  }
+  .ctrl-btn.active-toggle {
+    background: rgba(217, 118, 66, 0.28); color: #ffd4b8; border-color: rgba(217, 118, 66, 0.65);
+  }
+  #timeline-wrap {
+    display: flex; align-items: center; gap: 8px; min-width: 180px; width: 28vw; max-width: 360px;
+  }
+  #scrubber {
+    flex: 1; height: 5px; -webkit-appearance: none; appearance: none;
+    background: rgba(255,255,255,0.18); border-radius: 3px; outline: none; cursor: pointer;
+  }
+  #scrubber::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
+    background: var(--gold); border: 1.5px solid #1b1610; cursor: pointer;
+  }
+  .key-hints {
+    font-size: 10.5px; color: var(--text-muted); white-space: nowrap;
+    border-left: 1px solid rgba(255,255,255,0.12); padding-left: 10px;
+  }
+  kbd {
+    display: inline-block; padding: 1px 4px; font-size: 10px; font-family: inherit;
+    background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 3px; color: var(--gold);
+  }
+  @media (max-width: 860px) {
+    .key-hints { display: none; }
+    #shot-drawer { width: 280px; }
+  }
+  #loading-mask {
+    position: fixed; inset: 0; z-index: 50;
+    background: radial-gradient(circle at 50% 45%, #161c2b, #07090f);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    transition: opacity 0.6s ease;
+  }
+  #loading-mask.hidden { opacity: 0; pointer-events: none; }
+  #loading-mask h1 { font-size: 20px; font-weight: 500; letter-spacing: 0.25em; color: var(--gold); }
+  #loading-mask p { font-size: 12px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+<div id="canvas-wrap"></div>
+
+<div id="loading-mask">
+  <h1>滕 王 阁</h1>
+  <p id="loading-text">正在构筑江天与楼阁…</p>
+</div>
+
+<!-- 角落状态 HUD -->
+<div id="hud-corner">
+  <div class="hud-top">
+    <span class="hud-shot-id" id="hud-shot-id">镜 01 / 27</span>
+    <span class="hud-clock" id="hud-clock">申时 · 15:30</span>
+  </div>
+  <div class="hud-title" id="hud-title">江面初映 · 水影无阁</div>
+  <div class="hud-meta">
+    <span>镜内 <b id="hud-shot-time">00:00 / 00:08</b></span>
+    <span>全片 <b id="hud-total-time">00:00 / 05:30</b></span>
+    <span id="hud-fps">60 FPS</span>
+  </div>
+  <div class="hud-mini-bar"><div class="hud-mini-fill" id="hud-mini-fill"></div></div>
+</div>
+
+<!-- 右上角分镜菜单切换 -->
+<button id="menu-toggle" type="button" title="展开或关闭 27 镜分镜菜单">
+  <span id="menu-toggle-icon">☰</span>
+  <span id="menu-toggle-label">收起分镜</span>
+</button>
+
+<!-- 27 镜分镜抽屉 -->
+<aside id="shot-drawer" aria-label="27 镜分镜表">
+  <div class="drawer-header">
+    <h2>二十七镜分镜表</h2>
+    <span>总长 05:30 · 15:30→21:00</span>
+  </div>
+  <div id="shot-list"></div>
+</aside>
+
+<!-- 底部克制控制栏 -->
+<div id="controls-bar">
+  <button id="btn-seq" class="ctrl-btn primary" type="button" title="从头到尾按顺序连续播放全片">▶ 按顺序播放</button>
+  <button id="btn-play" class="ctrl-btn" type="button" title="播放或暂停当前位置 (Space)">暂停</button>
+  <button id="btn-prev" class="ctrl-btn" type="button" title="上一镜 (←)">◀</button>
+  <button id="btn-next" class="ctrl-btn" type="button" title="下一镜 (→)">▶</button>
+  <button id="btn-loop" class="ctrl-btn" type="button" title="开启或关闭当前单镜循环播放">单镜循环: 关</button>
+  <div id="timeline-wrap">
+    <input id="scrubber" type="range" min="0" max="330" step="0.05" value="0" aria-label="全片时间进度" />
+  </div>
+  <div class="key-hints">
+    <kbd>Space</kbd> 播放/暂停 &nbsp;<kbd>←</kbd><kbd>→</kbd> 切镜 &nbsp;<kbd>L</kbd> 单镜循环 &nbsp;<kbd>M</kbd> 菜单
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ==================== 1. 全片时间线与 27 分镜表 (总计 330 秒 = 05:30) ====================
+// 时间线映射：0s = 15:30, 330s = 21:00 (每分钟现实1秒对应片内1分钟，共330分钟=5.5小时)
+const TOTAL_DURATION = 330;
+
+// 人物出场仅 7 镜（镜02裙袂、镜07越肩甩出、镜11窗内、镜22回望背影、镜23露台剪影、镜24露台环绕、镜25远退见影），严格克制 <= 12 镜
+const SHOTS = [
+  // ===== 第一幕：入景（0:00–0:45，6镜）由水下贴面升起，扫局部，收于廊柱横移 =====
+  { id: 1,  act: '一、入景',      start: 0,   dur: 8,  title: '江面初映 · 水影无阁', scale: '特写/贴水', move: '贴水低掠+微加速俯仰', person: false,
+    note: '起幅贴近赣江水面，仅拍实时倒影中的飞檐与天光，楼体实体完全在画外' },
+  { id: 2,  act: '一、入景',      start: 8,   dur: 8,  title: '水岸石阶 · 碧裙微拂', scale: '近景',      move: '加速抬升+右弧推近',   person: true,
+    note: '带加速度抬离水面，掠过湿润码头石阶与岸畔红衣裙裾一角，楼基初露' },
+  { id: 3,  act: '一、入景',      start: 16,  dur: 7,  title: '丹陛石阶 · 拾级而上', scale: '近景',      move: '沿阶加速仰升推进',    person: false,
+    note: '贴石阶扶栏加速上行，白石望柱从镜头前依次掠过形成前景层次' },
+  { id: 4,  act: '一、入景',      start: 23,  dur: 7,  title: '朱廊宫灯 · 暖光初悬', scale: '特写',      move: '斜向滑升绕灯',        person: false,
+    note: '掠过回廊悬垂六角宫灯与木构斗拱，下午斜阳镀亮金漆边角' },
+  { id: 5,  act: '一、入景',      start: 30,  dur: 7,  title: '重檐瓦当 · 脊兽凌空', scale: '近景',      move: '贴檐弧线横掠',        person: false,
+    note: '擦过碧色琉璃瓦当与翘角脊兽，背景江天逐渐舒展，推高入阁期待' },
+  { id: 6,  act: '一、入景',      start: 37,  dur: 8,  title: '朱柱回廊 · 步移景换', scale: '中近景',    move: '廊柱间连续横移',      person: false,
+    note: '在底层与二层朱漆廊柱间横移，多根柱子近距掠过镜头形成强前景遮挡节奏' },
+
+  // ===== 第二幕：登临·江山（0:45–2:20，9镜）越肩交接、航拍拉开、窗框、全景光斑、长焦追鸟拉天际 =====
+  { id: 7,  act: '二、登临·江山', start: 45,  dur: 10, title: '越肩登临 · 人去江山来', scale: '近景→中景', move: '肩后推进越肩甩出',  person: true,
+    note: '从凭栏人物肩后贴近越过，将人物自然甩出画外，瞬间只剩飞檐与万里江山' },
+  { id: 8,  act: '二、登临·江山', start: 55,  dur: 11, title: '飞檐初展 · 阁峙江皋', scale: '中景→全景', move: '后拉带仰角大弧升',    person: false,
+    note: '承接越肩速度顺势高飞拉开，滕王阁三重明檐完整现身于江岸高台' },
+  { id: 9,  act: '二、登临·江山', start: 66,  dur: 12, title: '航拍大环 · 襟江带湖', scale: '大远景',    move: '高空大环绕(>150°)',   person: false,
+    note: '大幅航拍绕楼左旋拉开，将楼阁置入赣江曲流、远山青黛与孤洲沙渚关系中' },
+  { id: 10, act: '二、登临·江山', start: 78,  dur: 10, title: '返入高阁 · 穿檐入窗', scale: '全景→中景', move: '高空弧线俯冲切入',    person: false,
+    note: '自高空顺势切向顶层明间，贴近斗拱额枋滑入上层阁窗之内' },
+  { id: 11, act: '二、登临·江山', start: 88,  dur: 11, title: '高窗如画 · 江天入框', scale: '中景',      move: '窗内缓推+横移借框',   person: true,
+    note: '自顶层窗内向外望，雕花木窗框作为天然画框，侧影轻立窗畔眺望晚风江舟' },
+  { id: 12, act: '二、登临·江山', start: 99,  dur: 10, title: '穿窗出檐 · 云开日漏', scale: '全景',      move: '穿窗前推接广角横摇',  person: false,
+    note: '顺窗框前移出阁，云层裂开，金橙光斑缓缓扫过碧瓦飞檐与江面' },
+  { id: 13, act: '二、登临·江山', start: 109, dur: 11, title: '流云光斑 · 全景横摇', scale: '大景',      move: '缓慢横摇+微升',       person: false,
+    note: '广角横摇展现流光游走楼身、远帆点点与渐渐燃起的西天赤霞' },
+  { id: 14, act: '二、登临·江山', start: 120, dur: 10, title: '孤鹜齐飞 · 长焦紧跟', scale: '长焦特写',  move: '长焦实时锁定跟拍飞鸟', person: false,
+    note: '焦距收窄至长焦(FOV 22°)，紧随江上领航孤鹜掠过霞光与阁顶飞檐' },
+  { id: 15, act: '二、登临·江山', start: 130, dur: 10, title: '秋水一色 · 急拉天际', scale: '特写→极远', move: '急剧变焦后拉至天际线', person: false,
+    note: '由飞鸟长焦骤然广角急拉，霞光天穹与秋水江面融为一色，齐飞与一色同框' },
+
+  // ===== 第三幕：唱晚·抒怀（2:20–3:40，6镜）金转蓝、节奏放缓、楼阁渐小 =====
+  { id: 16, act: '三、唱晚·抒怀', start: 140, dur: 13, title: '渔舟唱晚 · 余晖沉江', scale: '远景',      move: '极缓后拉+微降',       person: false,
+    note: '落日沉入西山棱线，天色由暖金转玫瑰紫，渔舟归灯点点浮于江心' },
+  { id: 17, act: '三、唱晚·抒怀', start: 153, dur: 13, title: '暮色初蓝 · 华灯齐燃', scale: '大远景',    move: '低速平移横移',        person: false,
+    note: '进入蓝调时刻，冷蓝暮雾漫起，滕王阁重檐灯火与朱栏暖光次第亮起' },
+  { id: 18, act: '三、唱晚·抒怀', start: 166, dur: 13, title: '阁影渐微 · 水阔烟深', scale: '大远景',    move: '缓移带拉远',          person: false,
+    note: '视线沿江面缓缓拉远，远山如黛隐入蓝雾，楼阁灯影倒映拉长' },
+  { id: 19, act: '三、唱晚·抒怀', start: 179, dur: 14, title: '孤洲寒雾 · 遥望灯楼', scale: '极远景',    move: '持续缓退+微弧漂移',   person: false,
+    note: '拉远至江心开阔处，滕王阁缩成天地间一枚温润琥珀光点，情绪沉静辽阔' },
+  { id: 20, act: '三、唱晚·抒怀', start: 193, dur: 13, title: '星河初现 · 江波不语', scale: '大远景',    move: '缓推回望+微仰',       person: false,
+    note: '深蓝夜幕降临、星辰渐显，镜头在浩渺江雾中极缓回推，重牵视线向高阁' },
+  { id: 21, act: '三、唱晚·抒怀', start: 206, dur: 14, title: '溯光归阁 · 重近飞檐', scale: '远景→中景', move: '柔缓弧线近推升起',    person: false,
+    note: '循着楼阁暖灯与天际最后一线绛红余霞，缓缓攀升回到高处露台外侧' },
+
+  // ===== 第四幕：收束·诗（3:40–5:30，6镜）回到人物背影、露台剪影、环绕推边、留白空自流 =====
+  { id: 22, act: '四、收束·诗',   start: 220, dur: 16, title: '高台归影 · 独立晚风', scale: '中近景',    move: '缓推向高台背影',      person: true,
+    note: '回到高处露台人物背影，衣袂轻扬，栏杆与飞檐灯火勾出剪影轮廓' },
+  { id: 23, act: '四、收束·诗',   start: 236, dur: 17, title: '凭栏对霞 · 剪影沉思', scale: '近景',      move: '低速侧弧轻移',        person: true,
+    note: '人物剪影面向西天最后余霞与浩渺江面，微光勾勒发髻肩线，寂静克制' },
+  { id: 24, act: '四、收束·诗',   start: 253, dur: 18, title: '绕台告别 · 星斗垂江', scale: '中景→全景', move: '大角度缓环绕(>130°)', person: true,
+    note: '围绕高台与人物缓步旋转超过130°，栏柱与檐角掠过前景，星夜江天展开' },
+  { id: 25, act: '四、收束·诗',   start: 271, dur: 18, title: '人阁渐隐 · 推向画边', scale: '全景→远景', move: '环绕加拉远偏置构图',  person: true,
+    note: '边环绕边向东南拉远，将滕王阁与露台人影推向画面左侧边缘，留出大片江天' },
+  { id: 26, act: '四、收束·诗',   start: 289, dur: 20, title: '阁成远点 · 天水占满', scale: '极远景',    move: '极缓后退+右偏摇',     person: false,
+    note: '阁楼退成左侧天际微弱灯火之点，九成画面尽归夜空星河与漫漫赣江倒影' },
+  { id: 27, act: '四、收束·诗',   start: 309, dur: 21, title: '槛外长江 · 空自流',   scale: '极远景',    move: '极慢江面漂流不静止',  person: false,
+    note: '留足21秒余韵：镜头在江风微澜中极缓漂移，夜色江水悠悠东流，星影碎金不绝' }
+];
+
+// 验证总时长严格为 330s
+const COMPUTED_TOTAL = SHOTS.reduce((acc, s) => acc + s.dur, 0);
+
+// ==================== 2. 渲染器与场景初始化 ====================
+const container = document.getElementById('canvas-wrap');
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+container.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const fog = new THREE.FogExp2(0x9fb8cc, 0.0022);
+scene.fog = fog;
+
+const camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.25, 2200);
+
+// ==================== 3. 时辰连续光影曲线（15:30 → 21:00 无跳变） ====================
+// 关键帧按进度 u in [0, 1]（0=15:30, 0.35=17:25, 0.45=17:58, 0.56=18:35, 0.72=19:28, 1.0=21:00）
+const TIME_KEYS = [
+  { u: 0.00, sunElev: 34, sunAz: -42, zenith: 0x3b78b8, mid: 0x89b7d6, horizon: 0xebd7bc, sunCol: 0xfff0cc, sunInt: 2.8, ambCol: 0x9bb8d4, ambInt: 0.85, fogCol: 0xc2d1dc, fogDen: 0.0018, lantern: 0.05, stars: 0.00, cloudCol: 0xfff6e6, cloudGlow: 0xffe4b5, waterTint: 0x2a5a75, exp: 1.05 },
+  { u: 0.25, sunElev: 20, sunAz: -56, zenith: 0x2f5e9c, mid: 0x9e92a8, horizon: 0xf4b678, sunCol: 0xffc87a, sunInt: 2.6, ambCol: 0xb89688, ambInt: 0.78, fogCol: 0xd4a987, fogDen: 0.0021, lantern: 0.18, stars: 0.00, cloudCol: 0xffd2a0, cloudGlow: 0xff9e54, waterTint: 0x2d4a62, exp: 1.04 },
+  { u: 0.39, sunElev: 7.5, sunAz: -68, zenith: 0x253872, mid: 0xa85568, horizon: 0xff7b3a, sunCol: 0xff8138, sunInt: 2.35, ambCol: 0xa66a6e, ambInt: 0.65, fogCol: 0xc97b62, fogDen: 0.0024, lantern: 0.52, stars: 0.04, cloudCol: 0xff9568, cloudGlow: 0xff5a28, waterTint: 0x2a3650, exp: 1.02 },
+  { u: 0.48, sunElev: 1.8, sunAz: -74, zenith: 0x17224d, mid: 0x763b64, horizon: 0xe6613e, sunCol: 0xff5e2b, sunInt: 1.45, ambCol: 0x6f5578, ambInt: 0.55, fogCol: 0x8a5b6a, fogDen: 0.0027, lantern: 0.88, stars: 0.18, cloudCol: 0xd96b62, cloudGlow: 0xff6b38, waterTint: 0x1c2842, exp: 0.98 },
+  { u: 0.60, sunElev: -4.5, sunAz: -80, zenith: 0x0b1534, mid: 0x253566, horizon: 0x5d4b6e, sunCol: 0x7a68a6, sunInt: 0.38, ambCol: 0x3b4d78, ambInt: 0.48, fogCol: 0x293959, fogDen: 0.0029, lantern: 1.25, stars: 0.52, cloudCol: 0x485075, cloudGlow: 0x805570, waterTint: 0x0f1d36, exp: 0.95 },
+  { u: 0.76, sunElev: -11, sunAz: -88, zenith: 0x060c20, mid: 0x132042, horizon: 0x3b334f, sunCol: 0x4a5e96, sunInt: 0.22, ambCol: 0x273557, ambInt: 0.40, fogCol: 0x172238, fogDen: 0.0025, lantern: 1.45, stars: 0.85, cloudCol: 0x283250, cloudGlow: 0x5c3e4f, waterTint: 0x0a1324, exp: 0.94 },
+  { u: 1.00, sunElev: -18, sunAz: -96, zenith: 0x030612, mid: 0x0a1328, horizon: 0x1b2238, sunCol: 0x5a73a8, sunInt: 0.18, ambCol: 0x1d2944, ambInt: 0.34, fogCol: 0x0e1626, fogDen: 0.0022, lantern: 1.55, stars: 1.00, cloudCol: 0x1a2238, cloudGlow: 0x2b3654, waterTint: 0x070e1c, exp: 0.92 }
+];
+
+const _cA = new THREE.Color(), _cB = new THREE.Color();
+function lerpHex(hexA, hexB, f, out) {
+  _cA.setHex(hexA); _cB.setHex(hexB);
+  return out.copy(_cA).lerp(_cB, f);
+}
+function smoothstep(x) { return x * x * (3 - 2 * x); }
+
+const envState = {
+  sunDir: new THREE.Vector3(),
+  zenith: new THREE.Color(),
+  mid: new THREE.Color(),
+  horizon: new THREE.Color(),
+  sunCol: new THREE.Color(),
+  ambCol: new THREE.Color(),
+  fogCol: new THREE.Color(),
+  cloudCol: new THREE.Color(),
+  cloudGlow: new THREE.Color(),
+  waterTint: new THREE.Color(),
+  sunInt: 2.5, ambInt: 0.8, fogDen: 0.002, lantern: 0.1, stars: 0.0, exp: 1.0
+};
+
+function sampleEnvironment(tSec) {
+  const u = THREE.MathUtils.clamp(tSec / TOTAL_DURATION, 0, 1);
+  let i = 0;
+  while (i < TIME_KEYS.length - 2 && u > TIME_KEYS[i + 1].u) i++;
+  const a = TIME_KEYS[i], b = TIME_KEYS[i + 1];
+  const f = smoothstep(THREE.MathUtils.clamp((u - a.u) / Math.max(1e-5, b.u - a.u), 0, 1));
+
+  const elev = THREE.MathUtils.lerp(a.sunElev, b.sunElev, f) * Math.PI / 180;
+  const az = THREE.MathUtils.lerp(a.sunAz, b.sunAz, f) * Math.PI / 180;
+  envState.sunDir.set(
+    Math.cos(elev) * Math.sin(az),
+    Math.sin(elev),
+    Math.cos(elev) * Math.cos(az)
+  ).normalize();
+
+  lerpHex(a.zenith, b.zenith, f, envState.zenith);
+  lerpHex(a.mid, b.mid, f, envState.mid);
+  lerpHex(a.horizon, b.horizon, f, envState.horizon);
+  lerpHex(a.sunCol, b.sunCol, f, envState.sunCol);
+  lerpHex(a.ambCol, b.ambCol, f, envState.ambCol);
+  lerpHex(a.fogCol, b.fogCol, f, envState.fogCol);
+  lerpHex(a.cloudCol, b.cloudCol, f, envState.cloudCol);
+  lerpHex(a.cloudGlow, b.cloudGlow, f, envState.cloudGlow);
+  lerpHex(a.waterTint, b.waterTint, f, envState.waterTint);
+
+  envState.sunInt = THREE.MathUtils.lerp(a.sunInt, b.sunInt, f);
+  envState.ambInt = THREE.MathUtils.lerp(a.ambInt, b.ambInt, f);
+  envState.fogDen = THREE.MathUtils.lerp(a.fogDen, b.fogDen, f);
+  envState.lantern = THREE.MathUtils.lerp(a.lantern, b.lantern, f);
+  envState.stars = THREE.MathUtils.lerp(a.stars, b.stars, f);
+  envState.exp = THREE.MathUtils.lerp(a.exp, b.exp, f);
+}
+
+// 灯光
+const sunLight = new THREE.DirectionalLight(0xfff0cc, 2.6);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+sunLight.shadow.camera.near = 20;
+sunLight.shadow.camera.far = 360;
+const sBound = 95;
+sunLight.shadow.camera.left = -sBound;
+sunLight.shadow.camera.right = sBound;
+sunLight.shadow.camera.top = sBound;
+sunLight.shadow.camera.bottom = -sBound;
+sunLight.shadow.bias = -0.0005;
+scene.add(sunLight);
+
+const hemiLight = new THREE.HemisphereLight(0x9bb8d4, 0x2c241d, 0.8);
+scene.add(hemiLight);
+
+// 夜晚楼阁暖光群（4盏点光源覆盖各层飞檐）
+const pavilionLights = [];
+const pavLightPositions = [
+  [0, 12, 18, 65], [0, 26, 0, 80], [0, 38, 12, 65], [0, 14, -16, 55]
+];
+for (const [lx, ly, lz, dist] of pavLightPositions) {
+  const pl = new THREE.PointLight(0xff9c4a, 0.2, dist, 1.5);
+  pl.position.set(lx, ly, lz);
+  scene.add(pl);
+  pavilionLights.push(pl);
+}
+
+// 程序化天空穹顶（含云开移动、落霞、太阳、星辰）
+const skyUniforms = {
+  uZenith: { value: new THREE.Color() },
+  uMid: { value: new THREE.Color() },
+  uHorizon: { value: new THREE.Color() },
+  uSunDir: { value: new THREE.Vector3(0, 0.4, -1) },
+  uSunCol: { value: new THREE.Color() },
+  uCloudCol: { value: new THREE.Color() },
+  uCloudGlow: { value: new THREE.Color() },
+  uStars: { value: 0.0 },
+  uTime: { value: 0.0 },
+  uCloudOpen: { value: 0.0 }
+};
+
+const skyMat = new THREE.ShaderMaterial({
+  side: THREE.BackSide,
+  depthWrite: false,
+  fog: false,
+  uniforms: skyUniforms,
+  vertexShader: `
+    varying vec3 vWorldDir;
+    void main() {
+      vec4 wp = modelMatrix * vec4(position, 1.0);
+      vWorldDir = normalize(wp.xyz);
+      gl_Position = projectionMatrix * viewMatrix * wp;
+    }
+  `,
+  fragmentShader: `
+    varying vec3 vWorldDir;
+    uniform vec3 uZenith, uMid, uHorizon, uSunDir, uSunCol, uCloudCol, uCloudGlow;
+    uniform float uStars, uTime, uCloudOpen;
+
+    float hash(vec2 p) {
+      return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+    }
+    float noise(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      vec2 u = f * f * (3.0 - 2.0 * f);
+      return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+                 mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+    }
+    float fbm(vec2 p) {
+      float v = 0.0, a = 0.5;
+      mat2 rot = mat2(0.8, 0.6, -0.6, 0.8);
+      for (int i = 0; i < 4; i++) {
+        v += a * noise(p);
+        p = rot * p * 2.05;
+        a *= 0.5;
+      }
+      return v;
+    }
+
+    void main() {
+      vec3 d = normalize(vWorldDir);
+      float h = clamp(d.y, 0.0, 1.0);
+      vec3 col = mix(uHorizon, uMid, smoothstep(0.0, 0.28, h));
+      col = mix(col, uZenith, smoothstep(0.22, 0.82, h));
+
+      // 太阳与霞光晕染
+      float sunDot = max(dot(d, normalize(uSunDir)), 0.0);
+      float sunVis = smoothstep(-0.12, 0.04, uSunDir.y);
+      float halo = pow(sunDot, 6.0) * 0.42 + pow(sunDot, 48.0) * 0.55;
+      float disc = smoothstep(0.9992, 0.9997, sunDot) * 2.2 * sunVis;
+      col += uSunCol * (halo * smoothstep(-0.22, 0.08, uSunDir.y) + disc);
+
+      // 水平霞带增强
+      float glowBand = exp(-abs(d.y - 0.03) * 14.0) * pow(sunDot, 2.0) * smoothstep(-0.25, 0.05, uSunDir.y);
+      col += uCloudGlow * glowBand * 0.45;
+
+      // 程序化云层（随时间飘动，镜12-13出现云开裂隙）
+      if (d.y > 0.015) {
+        vec2 uv = d.xz / (d.y + 0.16) * 0.95;
+        uv.x += uTime * 0.008;
+        uv.y += uTime * 0.003;
+        float n = fbm(uv * 1.45 + vec2(fbm(uv * 0.8), 0.0) * 0.5);
+        float thresh = 0.44 + uCloudOpen * 0.12;
+        float cloud = smoothstep(thresh, thresh + 0.28, n) * smoothstep(0.015, 0.16, d.y) * (1.0 - smoothstep(0.55, 0.95, d.y));
+        vec3 cShade = mix(uCloudCol, uCloudGlow, pow(sunDot, 2.2) * 0.85);
+        col = mix(col, cShade, cloud * 0.72);
+      }
+
+      // 夜空星辰
+      if (uStars > 0.01 && d.y > 0.04) {
+        vec2 suv = floor(vec2(atan(d.z, d.x) * 140.0, asin(clamp(d.y, -1.0, 1.0)) * 220.0));
+        float st = hash(suv);
+        if (st > 0.9935) {
+          float tw = 0.65 + 0.35 * sin(uTime * 2.4 + st * 900.0);
+          float bright = smoothstep(0.9935, 0.9998, st) * tw * uStars * smoothstep(0.04, 0.25, d.y);
+          col += vec3(0.88, 0.93, 1.0) * bright * 1.35;
+        }
+      }
+
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `
+});
+const skyDome = new THREE.Mesh(new THREE.SphereGeometry(1400, 40, 24), skyMat);
+scene.add(skyDome);
+// ==================== 4. 实时平面反射水面（真实 Mirror Camera + RenderTarget） ====================
+const WATER_Y = 0;
+const reflectRT = new THREE.WebGLRenderTarget(1024, 1024, {
+  minFilter: THREE.LinearFilter,
+  magFilter: THREE.LinearFilter,
+  format: THREE.RGBAFormat
+});
+const reflectCam = new THREE.PerspectiveCamera();
+const clipPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -WATER_Y + 0.05);
+const textureMatrix = new THREE.Matrix4();
+
+const waterUniforms = {
+  tReflect: { value: reflectRT.texture },
+  uTexMatrix: { value: textureMatrix },
+  uTime: { value: 0 },
+  uSunDir: { value: new THREE.Vector3() },
+  uSunCol: { value: new THREE.Color() },
+  uWaterTint: { value: new THREE.Color(0x2a5a75) },
+  uFogCol: { value: new THREE.Color(0xc2d1dc) },
+  uFogDen: { value: 0.002 }
+};
+
+const waterMat = new THREE.ShaderMaterial({
+  uniforms: waterUniforms,
+  vertexShader: `
+    uniform mat4 uTexMatrix;
+    varying vec4 vReflCoord;
+    varying vec3 vWorldPos;
+    void main() {
+      vec4 wp = modelMatrix * vec4(position, 1.0);
+      vWorldPos = wp.xyz;
+      vReflCoord = uTexMatrix * wp;
+      gl_Position = projectionMatrix * viewMatrix * wp;
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tReflect;
+    uniform float uTime;
+    uniform vec3 uSunDir, uSunCol, uWaterTint, uFogCol;
+    uniform float uFogDen;
+    varying vec4 vReflCoord;
+    varying vec3 vWorldPos;
+
+    float waveH(vec2 p, float t) {
+      float w = 0.0;
+      w += sin(p.x * 0.17 + t * 1.15 + cos(p.y * 0.13 - t * 0.7)) * 0.45;
+      w += sin(p.y * 0.29 - t * 1.45 + p.x * 0.09) * 0.30;
+      w += sin((p.x - p.y) * 0.52 + t * 2.1) * 0.16;
+      w += cos((p.x + p.y * 1.3) * 0.95 - t * 2.6) * 0.09;
+      return w;
+    }
+
+    void main() {
+      vec2 p = vWorldPos.xz;
+      float eps = 0.22;
+      float hC = waveH(p, uTime);
+      float hX = waveH(p + vec2(eps, 0.0), uTime);
+      float hZ = waveH(p + vec2(0.0, eps), uTime);
+      vec3 N = normalize(vec3((hC - hX) * 0.18, 1.0, (hC - hZ) * 0.18));
+
+      vec3 V = normalize(cameraPosition - vWorldPos);
+      float dist = length(cameraPosition - vWorldPos);
+
+      // 真实平面反射 UV + 水波折射扰动
+      vec2 reflUV = vReflCoord.xy / max(vReflCoord.w, 0.0001);
+      float distAtten = clamp(1.0 / (1.0 + dist * 0.004), 0.18, 1.0);
+      vec2 distort = N.xz * (0.045 * distAtten);
+      vec2 uv = clamp(reflUV + distort, vec2(0.003), vec2(0.997));
+      vec3 reflCol = texture2D(tReflect, uv).rgb;
+
+      // Fresnel 混合水体底色与实时倒影
+      float ndv = clamp(dot(N, V), 0.0, 1.0);
+      float fresnel = mix(0.18, 0.96, pow(1.0 - ndv, 3.2));
+      vec3 deepCol = uWaterTint * (0.55 + 0.45 * clamp(uSunDir.y + 0.35, 0.15, 1.0));
+      vec3 col = mix(deepCol, reflCol, fresnel);
+
+      // 日照/霞光水面碎金高光
+      vec3 L = normalize(vec3(uSunDir.x, max(uSunDir.y, 0.045), uSunDir.z));
+      vec3 H = normalize(L + V);
+      float spec = pow(max(dot(N, H), 0.0), 160.0) * 1.85 + pow(max(dot(N, H), 0.0), 28.0) * 0.25;
+      float sunFade = smoothstep(-0.22, 0.08, uSunDir.y);
+      col += uSunCol * spec * sunFade;
+
+      // 指数平方雾与远景一致
+      float fogF = 1.0 - exp(-pow(dist * uFogDen, 2.0));
+      col = mix(col, uFogCol, clamp(fogF, 0.0, 1.0));
+
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `
+});
+
+const waterMesh = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400, 1, 1), waterMat);
+waterMesh.rotation.x = -Math.PI / 2;
+waterMesh.position.y = WATER_Y;
+scene.add(waterMesh);
+
+function updateWaterReflection() {
+  waterMesh.visible = false;
+  reflectCam.copy(camera);
+  reflectCam.position.y = 2 * WATER_Y - camera.position.y;
+  const look = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).add(camera.position);
+  look.y = 2 * WATER_Y - look.y;
+  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+  up.y = -up.y;
+  reflectCam.up.copy(up);
+  reflectCam.lookAt(look);
+  reflectCam.updateMatrixWorld();
+  reflectCam.updateProjectionMatrix();
+
+  // 构造投影矩阵（翻转镜像纹理映射）
+  textureMatrix.set(
+    0.5, 0.0, 0.0, 0.5,
+    0.0, 0.5, 0.0, 0.5,
+    0.0, 0.0, 0.5, 0.5,
+    0.0, 0.0, 0.0, 1.0
+  );
+  textureMatrix.multiply(reflectCam.projectionMatrix);
+  textureMatrix.multiply(reflectCam.matrixWorldInverse);
+
+  // 裁剪水下几何体避免倒影穿帮
+  renderer.clippingPlanes = [clipPlane];
+  const prevTarget = renderer.getRenderTarget();
+  renderer.setRenderTarget(reflectRT);
+  renderer.clear();
+  renderer.render(scene, reflectCam);
+  renderer.setRenderTarget(prevTarget);
+  renderer.clippingPlanes = [];
+  waterMesh.visible = true;
+}
+
+// ==================== 5. 材质库与山水自然环境 ====================
+const matStone = new THREE.MeshStandardMaterial({ color: 0xbcb6aa, roughness: 0.88, metalness: 0.05 });
+const matStoneDark = new THREE.MeshStandardMaterial({ color: 0x73706a, roughness: 0.92 });
+const matMarble = new THREE.MeshStandardMaterial({ color: 0xdad4c8, roughness: 0.65, metalness: 0.05 });
+const matCrimson = new THREE.MeshStandardMaterial({ color: 0x8c221d, roughness: 0.45, metalness: 0.08 });
+const matWoodDark = new THREE.MeshStandardMaterial({ color: 0x3b2419, roughness: 0.72 });
+const matGold = new THREE.MeshStandardMaterial({ color: 0xd6a64c, roughness: 0.32, metalness: 0.68 });
+const matTileGreen = new THREE.MeshStandardMaterial({ color: 0x1d4a44, roughness: 0.34, metalness: 0.22 });
+const matWallCream = new THREE.MeshStandardMaterial({ color: 0xdcd4c4, roughness: 0.82 });
+const matLanternGlow = new THREE.MeshStandardMaterial({
+  color: 0xffd599, emissive: 0xff8424, emissiveIntensity: 0.2, roughness: 0.35
+});
+const matWindowGlow = new THREE.MeshStandardMaterial({
+  color: 0x3a2b20, emissive: 0xffaa44, emissiveIntensity: 0.1, roughness: 0.3, transparent: true, opacity: 0.85
+});
+
+// 远山群峰 + 孤洲沙渚（形成“落霞秋水、远山青黛”的层次雾感）
+function buildMountainsAndShores() {
+  const group = new THREE.Group();
+  const mountainMatFar = new THREE.MeshStandardMaterial({ color: 0x2c3c4c, roughness: 0.95 });
+  const mountainMatMid = new THREE.MeshStandardMaterial({ color: 0x384d45, roughness: 0.92 });
+  const shoreMat = new THREE.MeshStandardMaterial({ color: 0x5c5b49, roughness: 0.96 });
+
+  // 西山与北岸连绵远山
+  const peaks = [
+    [-280, -340, 145, 72, 110, 0], [-140, -390, 180, 95, 130, 0], [30, -430, 210, 88, 140, 0],
+    [220, -380, 175, 78, 120, 0], [-420, -180, 160, 68, 140, 0], [-460, 60, 190, 82, 160, 0],
+    [-390, 290, 165, 60, 130, 0], [380, -210, 185, 65, 140, 0], [450, 90, 165, 52, 150, 0],
+    [-190, -220, 95, 32, 70, 1], [175, -245, 110, 36, 75, 1], [-270, 110, 95, 26, 80, 1]
+  ];
+  for (const [x, z, rx, h, rz, tier] of peaks) {
+    const geo = new THREE.ConeGeometry(1, h, 7, 2);
+    const pos = geo.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      const vx = pos.getX(i), vy = pos.getY(i), vz = pos.getZ(i);
+      const n = 1 + 0.18 * Math.sin(vx * 5 + x) * Math.cos(vz * 4 + z);
+      pos.setXYZ(i, vx * rx * n, vy + h * 0.45, vz * rz * n);
+    }
+    geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, tier === 0 ? mountainMatFar : mountainMatMid);
+    m.position.set(x, -3, z);
+    group.add(m);
+  }
+
+  // 滕王阁所在东岸基堤 + 远处沙洲
+  const bank = new THREE.Mesh(new THREE.CylinderGeometry(52, 68, 6, 32), shoreMat);
+  bank.position.set(0, -1.2, -16);
+  bank.scale.set(1.25, 1, 0.92);
+  bank.receiveShadow = true;
+  group.add(bank);
+
+  const shoals = [[-130, 85, 42, 14], [155, 115, 52, 18], [-85, -135, 36, 12]];
+  for (const [sx, sz, rx, rz] of shoals) {
+    const s = new THREE.Mesh(new THREE.CylinderGeometry(rx * 0.7, rx, 2.2, 18), shoreMat);
+    s.position.set(sx, -0.4, sz);
+    s.scale.set(1, 1, rz / rx);
+    group.add(s);
+  }
+
+  // 岸畔古柳与松树（低多边形写意层次）
+  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3b2c22, roughness: 0.95 });
+  const leafMat = new THREE.MeshStandardMaterial({ color: 0x2c4731, roughness: 0.88 });
+  const treeCoords = [
+    [-34, 2, -6], [-40, 2, -16], [-32, 2, -26], [34, 2, -6], [42, 2, -18], [30, 2, -28],
+    [-26, 2, -34], [24, 2, -36], [-48, 1.5, -22], [46, 1.5, -10]
+  ];
+  for (const [tx, ty, tz] of treeCoords) {
+    const tGrp = new THREE.Group();
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.48, 5.2, 6), trunkMat);
+    trunk.position.y = 2.6;
+    trunk.rotation.z = (Math.sin(tx) * 0.14);
+    tGrp.add(trunk);
+    for (let k = 0; k < 3; k++) {
+      const crown = new THREE.Mesh(new THREE.DodecahedronGeometry(2.4 - k * 0.35, 1), leafMat);
+      crown.position.set((k - 1) * 1.1, 5.0 + k * 0.9, Math.cos(tz + k) * 0.8);
+      crown.scale.set(1.25, 0.78, 1.15);
+      tGrp.add(crown);
+    }
+    tGrp.position.set(tx, ty, tz);
+    group.add(tGrp);
+  }
+
+  scene.add(group);
+}
+buildMountainsAndShores();
+
+// ==================== 6. 渔舟唱晚（江面缓行小舟 + 船头渔火） ====================
+const boats = [];
+function buildBoats() {
+  const hullMat = new THREE.MeshStandardMaterial({ color: 0x3a2618, roughness: 0.85 });
+  const canopyMat = new THREE.MeshStandardMaterial({ color: 0x6f5a44, roughness: 0.9 });
+  const configs = [
+    { x: -75, z: 68, vx: 0.24, vz: -0.05, rot: 0.15, scale: 1.0 },
+    { x: 92,  z: 86, vx: -0.19, vz: -0.04, rot: 2.95, scale: 0.9 },
+    { x: -125, z: 120, vx: 0.16, vz: 0.03, rot: -0.1, scale: 1.1 },
+    { x: 48,  z: 145, vx: -0.22, vz: 0.02, rot: 3.1, scale: 0.85 },
+    { x: -45, z: 185, vx: 0.14, vz: -0.03, rot: 0.2, scale: 1.05 }
+  ];
+  for (const cfg of configs) {
+    const g = new THREE.Group();
+    const hull = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.65, 1.65), hullMat);
+    hull.position.y = 0.28;
+    g.add(hull);
+    const prow = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.8, 4), hullMat);
+    prow.rotation.z = -Math.PI / 2;
+    prow.position.set(3.4, 0.42, 0);
+    g.add(prow);
+    const canopy = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 2.3, 8, 1, false, 0, Math.PI), canopyMat);
+    canopy.rotation.z = Math.PI / 2;
+    canopy.position.set(-0.3, 0.65, 0);
+    g.add(canopy);
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), matLanternGlow);
+    lamp.position.set(2.85, 1.25, 0);
+    g.add(lamp);
+    g.scale.setScalar(cfg.scale);
+    g.rotation.y = cfg.rot;
+    scene.add(g);
+    boats.push({ group: g, cfg });
+  }
+}
+buildBoats();
+
+// ==================== 7. 孤鹜与飞鸟群（镜14长焦实时追踪领航孤鹜） ====================
+const birds = [];
+const birdBodyMat = new THREE.MeshStandardMaterial({ color: 0xf4ece2, roughness: 0.7 });
+const birdWingTipMat = new THREE.MeshStandardMaterial({ color: 0x2a2726, roughness: 0.8 });
+
+function createBird(scale = 1.0) {
+  const root = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.ConeGeometry(0.22, 1.35, 6), birdBodyMat);
+  body.rotation.x = Math.PI / 2;
+  root.add(body);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 0.55, 5), birdBodyMat);
+  neck.rotation.x = Math.PI / 2.2;
+  neck.position.set(0, 0.08, 0.75);
+  root.add(neck);
+
+  // 左右扇动翅膀
+  const wingGeo = new THREE.BoxGeometry(1.45, 0.05, 0.42);
+  wingGeo.translate(0.72, 0, 0);
+  const leftPivot = new THREE.Group();
+  const leftWing = new THREE.Mesh(wingGeo, birdBodyMat);
+  const leftTip = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.045, 0.34), birdWingTipMat);
+  leftTip.position.set(1.55, 0, -0.04);
+  leftPivot.add(leftWing, leftTip);
+  leftPivot.position.set(0.1, 0.05, 0.08);
+  root.add(leftPivot);
+
+  const rightPivot = new THREE.Group();
+  const rightWing = new THREE.Mesh(wingGeo, birdBodyMat);
+  rightWing.scale.x = -1;
+  const rightTip = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.045, 0.34), birdWingTipMat);
+  rightTip.position.set(-1.55, 0, -0.04);
+  rightPivot.add(rightWing, rightTip);
+  rightPivot.position.set(-0.1, 0.05, 0.08);
+  root.add(rightPivot);
+
+  root.scale.setScalar(scale);
+  scene.add(root);
+  return { root, leftPivot, rightPivot };
+}
+
+// 1 只领航孤鹜（用于镜14-15精准跟拍）+ 6 只伴飞远鸿
+const leadBird = createBird(1.35);
+birds.push({ obj: leadBird, isLead: true, offset: new THREE.Vector3(0, 0, 0), phase: 0 });
+const flockOffsets = [
+  [-5.5, 1.4, -4.5], [6.2, 2.0, -5.8], [-10.5, 2.8, -9.0],
+  [11.0, 0.9, -10.2], [-15.5, 3.6, -14.0], [16.8, 2.2, -16.0]
+];
+flockOffsets.forEach((off, idx) => {
+  birds.push({
+    obj: createBird(0.95 + (idx % 2) * 0.15),
+    isLead: false,
+    offset: new THREE.Vector3(...off),
+    phase: idx * 1.15 + 0.7
+  });
+});
+
+// 确定性飞鸟轨迹函数（任意时间 tSec 可精确定位，确保长焦锁拍稳定）
+function getLeadBirdPos(tSec, out = new THREE.Vector3()) {
+  // 在 120s-140s 期间掠过阁前江天与落霞方向
+  const dt = tSec - 125;
+  const x = -65 + dt * 5.2 + Math.sin(dt * 0.25) * 8;
+  const y = 34 + Math.sin(dt * 0.32) * 3.8 + Math.max(0, dt) * 0.22;
+  const z = 44 - Math.cos(dt * 0.18) * 14 - dt * 1.1;
+  return out.set(x, y, z);
+}
+
+const _bPos = new THREE.Vector3(), _bNext = new THREE.Vector3();
+function updateBirds(tSec) {
+  getLeadBirdPos(tSec, _bPos);
+  getLeadBirdPos(tSec + 0.15, _bNext);
+  for (const b of birds) {
+    const p = _bPos.clone().add(b.offset);
+    if (!b.isLead) {
+      p.y += Math.sin(tSec * 1.4 + b.phase) * 0.9;
+    }
+    const pNext = _bNext.clone().add(b.offset);
+    b.obj.root.position.copy(p);
+    b.obj.root.lookAt(pNext);
+    const flap = Math.sin(tSec * 6.8 + b.phase) * 0.58;
+    b.obj.leftPivot.rotation.z = flap;
+    b.obj.rightPivot.rotation.z = -flap;
+  }
+}
+
+// ==================== 8. 滕王阁精细三维建筑（台基、石阶、三重飞檐、瓦当脊兽、朱柱回廊、宫灯、雕花窗框） ====================
+const pavilionGroup = new THREE.Group();
+scene.add(pavilionGroup);
+
+// 辅助函数：构建带翘角飞檐、瓦当与脊兽的中式重檐屋顶
+function buildChineseRoof(width, depth, height, eaveOverhang, yPos, isTop = false) {
+  const g = new THREE.Group();
+  const halfW = width * 0.5 + eaveOverhang;
+  const halfD = depth * 0.5 + eaveOverhang;
+
+  // 1) 主屋面（四坡微微反宇曲面）
+  const segX = 12, segZ = 12;
+  const roofGeo = new THREE.PlaneGeometry(halfW * 2, halfD * 2, segX, segZ);
+  roofGeo.rotateX(-Math.PI / 2);
+  const pos = roofGeo.attributes.position;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    const nx = Math.abs(x) / halfW;
+    const nz = Math.abs(z) / halfD;
+    const d = Math.max(nx, nz); // 0=中心, 1=檐口
+    // 传统反宇举折曲线 + 四角翼角翘起
+    const ridgeFlat = isTop ? 0.14 : 0.34;
+    const slopeT = THREE.MathUtils.clamp((d - ridgeFlat) / (1 - ridgeFlat), 0, 1);
+    let y = height * Math.pow(Math.max(0, 1 - slopeT), 1.45);
+    // 翼角翘起（四角 nx, nz 同大处明显上扬）
+    const cornerBoost = Math.pow(Math.max(0, nx * nz), 1.8) * 2.15;
+    y += cornerBoost;
+    pos.setY(i, y);
+  }
+  roofGeo.computeVertexNormals();
+  const roofMesh = new THREE.Mesh(roofGeo, matTileGreen);
+  roofMesh.castShadow = true;
+  roofMesh.receiveShadow = true;
+  g.add(roofMesh);
+
+  // 2) 四条垂脊 + 翼角翘脊与脊兽（镜05近景特写要点）
+  const corners = [
+    [-halfW, -halfD], [halfW, -halfD], [halfW, halfD], [-halfW, halfD]
+  ];
+  for (const [cx, cz] of corners) {
+    const dirX = Math.sign(cx), dirZ = Math.sign(cz);
+    // 脊兽队列（仙人走兽 4 尊沿翼角斜脊排列）
+    for (let k = 0; k < 4; k++) {
+      const f = 0.72 + k * 0.085;
+      const sx = cx * f, sz = cz * f;
+      const rf = isTop ? 0.14 : 0.34;
+      const st = THREE.MathUtils.clamp((f - rf) / (1 - rf), 0, 1);
+      const sy = height * Math.pow(Math.max(0, 1 - st), 1.45)
+                 + Math.pow(f * f, 1.8) * 2.15 + 0.42;
+      const beast = new THREE.Mesh(
+        new THREE.ConeGeometry(0.18 - k * 0.02, 0.72 - k * 0.06, 5),
+        matGold
+      );
+      beast.position.set(sx, sy, sz);
+      beast.rotation.z = -dirX * 0.18;
+      beast.rotation.x = dirZ * 0.18;
+      g.add(beast);
+    }
+    // 檐角翘首龙头吻饰
+    const finial = new THREE.Mesh(new THREE.OctahedronGeometry(0.36, 0), matGold);
+    finial.position.set(cx * 1.01, 2.35, cz * 1.01);
+    g.add(finial);
+  }
+
+  // 3) 檐口金色瓦当排列（沿正南临江面和东西两侧）
+  const wadangGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.16, 8);
+  wadangGeo.rotateX(Math.PI / 2);
+  const step = 1.15;
+  for (let x = -halfW + 0.6; x <= halfW - 0.6; x += step) {
+    const nx = Math.abs(x) / halfW;
+    const wy = Math.pow(nx, 1.8) * 2.15 - 0.08;
+    const w1 = new THREE.Mesh(wadangGeo, matGold);
+    w1.position.set(x, wy, halfD + 0.04);
+    g.add(w1);
+    const w2 = new THREE.Mesh(wadangGeo, matGold);
+    w2.position.set(x, wy, -halfD - 0.04);
+    g.add(w2);
+  }
+
+  // 4) 顶层正脊与宝顶鸱吻
+  if (isTop) {
+    const ridge = new THREE.Mesh(new THREE.BoxGeometry(width * 0.45, 0.9, 0.75), matGold);
+    ridge.position.y = height + 0.35;
+    g.add(ridge);
+    const spire = new THREE.Mesh(new THREE.ConeGeometry(0.85, 3.8, 8), matGold);
+    spire.position.y = height + 2.4;
+    g.add(spire);
+    for (const s of [-1, 1]) {
+      const chiwen = new THREE.Mesh(new THREE.BoxGeometry(0.95, 1.5, 0.6), matGold);
+      chiwen.position.set(s * (width * 0.22), height + 0.95, 0);
+      g.add(chiwen);
+    }
+  }
+
+  // 5) 檐下斗拱带（红木色横枋+斗拱块）
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(width + 1.2, 0.9, depth + 1.2), matCrimson);
+  beam.position.y = -0.5;
+  g.add(beam);
+
+  const dgGeo = new THREE.BoxGeometry(0.55, 0.52, 0.85);
+  for (let x = -width * 0.48; x <= width * 0.48; x += 2.2) {
+    const dgF = new THREE.Mesh(dgGeo, matGold);
+    dgF.position.set(x, -0.88, depth * 0.5 + 0.35);
+    g.add(dgF);
+    const dgB = new THREE.Mesh(dgGeo, matGold);
+    dgB.position.set(x, -0.88, -depth * 0.5 - 0.35);
+    g.add(dgB);
+  }
+
+  g.position.y = yPos;
+  return g;
+}
+
+// 辅助函数：挂一盏传统六角宫灯
+function createLantern() {
+  const g = new THREE.Group();
+  const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 5), matWoodDark);
+  cord.position.y = 0.45;
+  const topCap = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.32, 6), matWoodDark);
+  topCap.position.y = 0.05;
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.3, 0.78, 6), matLanternGlow);
+  body.position.y = -0.45;
+  const botCap = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.12, 0.22, 6), matGold);
+  botCap.position.y = -0.92;
+  const tassel = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.09, 0.5, 5), matCrimson);
+  tassel.position.y = -1.25;
+  g.add(cord, topCap, body, botCap, tassel);
+  return g;
+}
+
+// 辅助函数：白玉石栏杆一段
+function buildBalustrade(x1, z1, x2, z2, y, posts = 6) {
+  const g = new THREE.Group();
+  const dx = x2 - x1, dz = z2 - z1;
+  const len = Math.hypot(dx, dz);
+  const ang = Math.atan2(dx, dz);
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.18, len), matMarble);
+  rail.position.set((x1 + x2) * 0.5, y + 0.95, (z1 + z2) * 0.5);
+  rail.rotation.y = ang;
+  g.add(rail);
+  const panel = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.62, len - 0.2), matMarble);
+  panel.position.set((x1 + x2) * 0.5, y + 0.45, (z1 + z2) * 0.5);
+  panel.rotation.y = ang;
+  g.add(panel);
+
+  for (let i = 0; i <= posts; i++) {
+    const f = i / posts;
+    const px = x1 + dx * f, pz = z1 + dz * f;
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.22, 0.3), matMarble);
+    post.position.set(px, y + 0.61, pz);
+    g.add(post);
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.17, 7, 7), matMarble);
+    orb.position.set(px, y + 1.32, pz);
+    g.add(orb);
+  }
+  return g;
+}
+
+// 构筑滕王阁主体（中心位于 x=0, z=-16，正面朝向 +Z 赣江）
+function buildTengwangPavilion() {
+  const Z0 = -16;
+
+  // --- A. 临江水岸码头 + 丹陛石阶（镜02、镜03沿阶加速仰升） ---
+  const pier = new THREE.Mesh(new THREE.BoxGeometry(20, 1.4, 14), matStoneDark);
+  pier.position.set(0, 0.5, 22);
+  pier.receiveShadow = true;
+  pavilionGroup.add(pier);
+
+  // 逐级石阶（从水岸 z=16, y=1.1 升至一层台基 z=4, y=6.5）
+  const stepCount = 16;
+  for (let i = 0; i < stepCount; i++) {
+    const f = i / (stepCount - 1);
+    const st = new THREE.Mesh(new THREE.BoxGeometry(11.5, 0.48, 0.95), matStone);
+    st.position.set(0, 1.2 + f * 5.2, 16.5 - f * 12.2);
+    st.receiveShadow = true;
+    pavilionGroup.add(st);
+  }
+  // 石阶两侧白石望柱与斜栏（形成镜03前景掠过）
+  for (const side of [-1, 1]) {
+    for (let i = 0; i <= 7; i++) {
+      const f = i / 7;
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.45, 1.55, 0.45), matMarble);
+      p.position.set(side * 6.0, 1.9 + f * 5.2, 16.6 - f * 12.2);
+      pavilionGroup.add(p);
+      const cap = new THREE.Mesh(new THREE.SphereGeometry(0.24, 8, 8), matMarble);
+      cap.position.set(side * 6.0, 2.75 + f * 5.2, 16.6 - f * 12.2);
+      pavilionGroup.add(cap);
+    }
+  }
+
+  // --- B. 高大砖石城台基座（仿宋高台制式） ---
+  const base1 = new THREE.Mesh(new THREE.BoxGeometry(44, 6.5, 36), matStoneDark);
+  base1.position.set(0, 3.25, Z0);
+  base1.receiveShadow = true;
+  base1.castShadow = true;
+  pavilionGroup.add(base1);
+
+  const base2 = new THREE.Mesh(new THREE.BoxGeometry(36, 3.0, 30), matStone);
+  base2.position.set(0, 8.0, Z0);
+  base2.receiveShadow = true;
+  pavilionGroup.add(base2);
+
+  // 台基四周白石栏杆（临江正中留石阶开口）
+  const Y_BASE1 = 6.5;
+  pavilionGroup.add(buildBalustrade(-21.5, Z0 + 17.5, -6.2, Z0 + 17.5, Y_BASE1, 5));
+  pavilionGroup.add(buildBalustrade(6.2, Z0 + 17.5, 21.5, Z0 + 17.5, Y_BASE1, 5));
+  pavilionGroup.add(buildBalustrade(-21.5, Z0 - 17.5, -21.5, Z0 + 17.5, Y_BASE1, 8));
+  pavilionGroup.add(buildBalustrade(21.5, Z0 - 17.5, 21.5, Z0 + 17.5, Y_BASE1, 8));
+
+  // --- C. 三层明阁 + 朱漆廊柱回廊 + 宫灯 + 上层雕花望江窗 ---
+  const floors = [
+    { y: 9.5,  h: 6.4, w: 26, d: 21, eave: 4.2, roofH: 3.6, colStep: 4.3, hasTerrace: false, isTop: false },
+    { y: 18.8, h: 6.0, w: 21, d: 17, eave: 3.9, roofH: 3.4, colStep: 4.1, hasTerrace: true,  isTop: false },
+    { y: 27.6, h: 5.8, w: 15.5, d: 12.5, eave: 3.6, roofH: 5.4, colStep: 3.7, hasTerrace: true, isTop: true }
+  ];
+
+  floors.forEach((fl, fi) => {
+    const fg = new THREE.Group();
+    fg.position.set(0, fl.y, Z0);
+
+    // 平台楼板
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(fl.w + 4.8, 0.7, fl.d + 4.8), matStone);
+    slab.position.y = -0.35;
+    slab.receiveShadow = true;
+    fg.add(slab);
+
+    // 核心殿身墙体（留出顶层正南临江开窗洞，供镜11窗内望江）
+    if (!fl.isTop) {
+      const core = new THREE.Mesh(new THREE.BoxGeometry(fl.w - 3.6, fl.h, fl.d - 3.6), matWallCream);
+      core.position.y = fl.h * 0.5;
+      core.castShadow = true;
+      core.receiveShadow = true;
+      fg.add(core);
+      // 暖光格栅门窗装饰条
+      const winBand = new THREE.Mesh(new THREE.BoxGeometry(fl.w - 3.4, fl.h * 0.58, fl.d - 3.4), matWindowGlow);
+      winBand.position.y = fl.h * 0.52;
+      fg.add(winBand);
+    } else {
+      // 顶层中空明间（北、东、西三面墙 + 南面雕花大窗框，方便镜10-12穿窗）
+      const iw = fl.w - 3.6, id = fl.d - 3.6;
+      const backW = new THREE.Mesh(new THREE.BoxGeometry(iw, fl.h, 0.5), matWallCream);
+      backW.position.set(0, fl.h * 0.5, -id * 0.5);
+      const leftW = new THREE.Mesh(new THREE.BoxGeometry(0.5, fl.h, id), matWallCream);
+      leftW.position.set(-iw * 0.5, fl.h * 0.5, 0);
+      const rightW = new THREE.Mesh(new THREE.BoxGeometry(0.5, fl.h, id), matWallCream);
+      rightW.position.set(iw * 0.5, fl.h * 0.5, 0);
+      fg.add(backW, leftW, rightW);
+
+      // 南面望江雕花大窗框（镜11以窗框当画框！）
+      const fz = id * 0.5;
+      const frameTop = new THREE.Mesh(new THREE.BoxGeometry(iw, 1.15, 0.42), matCrimson);
+      frameTop.position.set(0, fl.h - 0.58, fz);
+      const frameBot = new THREE.Mesh(new THREE.BoxGeometry(iw, 1.25, 0.42), matCrimson);
+      frameBot.position.set(0, 0.62, fz);
+      const frameL = new THREE.Mesh(new THREE.BoxGeometry(2.6, fl.h, 0.42), matCrimson);
+      frameL.position.set(-iw * 0.5 + 1.3, fl.h * 0.5, fz);
+      const frameR = new THREE.Mesh(new THREE.BoxGeometry(2.6, fl.h, 0.42), matCrimson);
+      frameR.position.set(iw * 0.5 - 1.3, fl.h * 0.5, fz);
+      fg.add(frameTop, frameBot, frameL, frameR);
+
+      // 窗框内精致木雕棂条（两侧格心留出中间宽阔画幅）
+      for (const sx of [-1, 1]) {
+        const mullion = new THREE.Mesh(new THREE.BoxGeometry(0.14, fl.h - 2.3, 0.18), matGold);
+        mullion.position.set(sx * 2.55, fl.h * 0.5, fz);
+        fg.add(mullion);
+        const sideBar = new THREE.Mesh(new THREE.BoxGeometry(0.12, fl.h - 2.3, 0.18), matWoodDark);
+        sideBar.position.set(sx * 3.1, fl.h * 0.5, fz);
+        fg.add(sideBar);
+      }
+      const lintelGold = new THREE.Mesh(new THREE.BoxGeometry(5.3, 0.14, 0.24), matGold);
+      lintelGold.position.set(0, fl.h - 1.22, fz);
+      fg.add(lintelGold);
+      const sillGold = new THREE.Mesh(new THREE.BoxGeometry(5.3, 0.14, 0.24), matGold);
+      sillGold.position.set(0, 1.3, fz);
+      fg.add(sillGold);
+    }
+
+    // 环绕朱漆廊柱（镜06廊柱横移前景遮挡的核心构件）
+    const colGeo = new THREE.CylinderGeometry(0.36, 0.4, fl.h, 12);
+    const colBaseGeo = new THREE.CylinderGeometry(0.54, 0.62, 0.45, 10);
+    const halfW = fl.w * 0.5, halfD = fl.d * 0.5;
+    const colsX = Math.max(4, Math.round(fl.w / fl.colStep));
+    const colsZ = Math.max(3, Math.round(fl.d / fl.colStep));
+
+    for (let ix = 0; ix <= colsX; ix++) {
+      const cx = -halfW + (fl.w * ix) / colsX;
+      for (const sz of [-1, 1]) {
+        const cz = sz * halfD;
+        const col = new THREE.Mesh(colGeo, matCrimson);
+        col.position.set(cx, fl.h * 0.5, cz);
+        col.castShadow = true;
+        fg.add(col);
+        const cb = new THREE.Mesh(colBaseGeo, matMarble);
+        cb.position.set(cx, 0.22, cz);
+        fg.add(cb);
+
+        // 悬垂宫灯（南面与角落廊柱间）
+        if (sz === 1 && ix < colsX && (ix % 2 === 0 || fi === 0)) {
+          const lx = cx + (fl.w / colsX) * 0.5;
+          const lantern = createLantern();
+          lantern.position.set(lx, fl.h - 0.55, cz + 0.55);
+          fg.add(lantern);
+        }
+      }
+    }
+    for (let iz = 1; iz < colsZ; iz++) {
+      const cz = -halfD + (fl.d * iz) / colsZ;
+      for (const sx of [-1, 1]) {
+        const col = new THREE.Mesh(colGeo, matCrimson);
+        col.position.set(sx * halfW, fl.h * 0.5, cz);
+        col.castShadow = true;
+        fg.add(col);
+        const cb = new THREE.Mesh(colBaseGeo, matMarble);
+        cb.position.set(sx * halfW, 0.22, cz);
+        fg.add(cb);
+      }
+    }
+
+    // 露台观江白石栏杆（二层与顶层宽阔外廊露台）
+    const rw = fl.w * 0.5 + 2.1, rd = fl.d * 0.5 + 2.1;
+    fg.add(buildBalustrade(-rw, rd, rw, rd, 0, 7));
+    fg.add(buildBalustrade(-rw, -rd, rw, -rd, 0, 7));
+    fg.add(buildBalustrade(-rw, -rd, -rw, rd, 0, 6));
+    fg.add(buildBalustrade(rw, -rd, rw, rd, 0, 6));
+
+    // 二层正南悬“滕王阁”金字匾额
+    if (fi === 1) {
+      const plaque = new THREE.Mesh(new THREE.BoxGeometry(5.6, 1.8, 0.28), matWoodDark);
+      plaque.position.set(0, fl.h - 0.9, halfD + 0.38);
+      const pBorder = new THREE.Mesh(new THREE.BoxGeometry(5.9, 2.05, 0.2), matGold);
+      pBorder.position.set(0, fl.h - 0.9, halfD + 0.32);
+      fg.add(pBorder, plaque);
+    }
+
+    // 飞檐重屋顶
+    fg.add(buildChineseRoof(fl.w, fl.d, fl.roofH, fl.eave, fl.h, fl.isTop));
+    pavilionGroup.add(fg);
+  });
+
+  // 两侧对称小重檐配亭（增强滕王阁“主阁带抱厦翼亭”剪影辨识度）
+  for (const side of [-1, 1]) {
+    const wing = new THREE.Group();
+    wing.position.set(side * 22.5, 6.5, Z0 - 2);
+    const wSlab = new THREE.Mesh(new THREE.BoxGeometry(9, 0.6, 9), matStone);
+    wing.add(wSlab);
+    for (const cx of [-3.4, 3.4]) {
+      for (const cz of [-3.4, 3.4]) {
+        const col = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, 5.2, 10), matCrimson);
+        col.position.set(cx, 2.6, cz);
+        wing.add(col);
+      }
+    }
+    const lan = createLantern();
+    lan.position.set(0, 4.7, 3.8);
+    wing.add(lan);
+    wing.add(buildChineseRoof(7.4, 7.4, 3.2, 2.4, 5.2, true));
+    pavilionGroup.add(wing);
+  }
+}
+buildTengwangPavilion();
+
+// ==================== 9. 人物模型（古装仕女/文士背影：仅在指定 7 镜出现，其余隐藏） ====================
+const personGroup = new THREE.Group();
+const robeMat = new THREE.MeshStandardMaterial({ color: 0x8f2b2b, roughness: 0.72 });
+const sashMat = new THREE.MeshStandardMaterial({ color: 0xd9b372, roughness: 0.55 });
+const hairMat = new THREE.MeshStandardMaterial({ color: 0x181515, roughness: 0.6 });
+const skinMat = new THREE.MeshStandardMaterial({ color: 0xe6c8ae, roughness: 0.65 });
+
+const skirtMesh = new THREE.Mesh(new THREE.ConeGeometry(0.56, 1.32, 14), robeMat);
+skirtMesh.position.y = 0.66;
+const torsoMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.28, 0.66, 10), robeMat);
+torsoMesh.position.y = 1.48;
+const sashMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.25, 0.14, 10), sashMat);
+sashMesh.position.y = 1.24;
+const headMesh = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 10), skinMat);
+headMesh.position.y = 1.96;
+const bunMesh = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), hairMat);
+bunMesh.position.set(0, 2.08, -0.06);
+const hairBack = new THREE.Mesh(new THREE.SphereGeometry(0.185, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.65), hairMat);
+hairBack.position.set(0, 1.98, -0.02);
+// 飘带（随微风轻轻摆动）
+const ribbonMesh = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.92, 0.03), sashMat);
+ribbonMesh.position.set(0.24, 1.12, -0.18);
+
+personGroup.add(skirtMesh, torsoMesh, sashMesh, headMesh, bunMesh, hairBack, ribbonMesh);
+personGroup.castShadow = true;
+scene.add(personGroup);
+
+// 人物四个克制站位：
+// P1(镜02水岸石阶裙裾) | P2(镜07二层观江露台越肩) | P3(镜11顶层窗畔侧影) | P4(镜22-25高处顶层露台背影对霞)
+const PERSON_POSES = {
+  shore:   { pos: new THREE.Vector3(3.6, 1.35, 16.0), rotY: -0.45 },
+  terrace: { pos: new THREE.Vector3(0.0, 18.8, -5.6), rotY: 0.0 },
+  window:  { pos: new THREE.Vector3(-1.85, 27.6, -12.3), rotY: 0.35 },
+  highTop: { pos: new THREE.Vector3(0.0, 27.6, -8.0), rotY: 0.0 }
+};
+
+function updatePersonForTime(tSec) {
+  ribbonMesh.rotation.z = 0.18 + Math.sin(tSec * 2.2) * 0.14;
+  ribbonMesh.rotation.x = 0.12 + Math.cos(tSec * 1.7) * 0.08;
+  skirtMesh.rotation.z = Math.sin(tSec * 1.5) * 0.025;
+
+  // 严格按分镜表控制出场（仅7镜可见，平滑切换不穿帮）
+  if (tSec >= 7.0 && tSec <= 16.5) {
+    personGroup.visible = true;
+    personGroup.position.copy(PERSON_POSES.shore.pos);
+    personGroup.rotation.y = PERSON_POSES.shore.rotY;
+  } else if (tSec >= 44.2 && tSec <= 55.5) {
+    personGroup.visible = true;
+    personGroup.position.copy(PERSON_POSES.terrace.pos);
+    personGroup.rotation.y = PERSON_POSES.terrace.rotY;
+  } else if (tSec >= 87.0 && tSec <= 99.5) {
+    personGroup.visible = true;
+    personGroup.position.copy(PERSON_POSES.window.pos);
+    personGroup.rotation.y = PERSON_POSES.window.rotY;
+  } else if (tSec >= 219.0 && tSec <= 290.0) {
+    personGroup.visible = true;
+    personGroup.position.copy(PERSON_POSES.highTop.pos);
+    personGroup.rotation.y = PERSON_POSES.highTop.rotY;
+  } else {
+    personGroup.visible = false;
+  }
+}
+
+// ==================== 10. 27 镜全程连续运镜引擎（无硬切、无静止镜） ====================
+// 阳光云隙游走光斑（镜12-13配合云开在楼身上移动）
+const sunSpot = new THREE.SpotLight(0xffb866, 0, 220, Math.PI / 6.5, 0.72, 1.0);
+sunSpot.position.set(-85, 78, 35);
+const sunSpotTarget = new THREE.Object3D();
+sunSpotTarget.position.set(0, 22, -16);
+scene.add(sunSpot, sunSpotTarget);
+sunSpot.target = sunSpotTarget;
+
+const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
+const _birdTmp = new THREE.Vector3();
+
+// 连续关键帧表：每个节点对应镜头边界（t=SHOTS[k].start），支持局部加速、柱间横移、大角度环绕、长焦追鸟
+// 任意时刻通过前后相邻节点平滑插值，并叠加该镜专属运动函数（边界处权重为 0，确保 100% 连续无硬切）
+const CAM_NODES = [
+  // t=0 镜01起幅：贴水面(y=0.58)，俯看水面中滕王阁倒影(target y=-10.5)，楼实体完全在画外
+  { t: 0,   pos: [0, 0.58, 42.0],    look: [0, -11.2, 12.0],   fov: 46 },
+  // t=8 镜01→02：仍低贴水面但视野刚触岸边码头，开始带加速度抬升
+  { t: 8,   pos: [4.2, 1.15, 29.5],  look: [2.2, -1.6, 15.5],  fov: 46 },
+  // t=16 镜02→03：掠过水岸石阶与人物裙裾(3.6,1.35,16.0)，切入石阶中轴仰升
+  { t: 16,  pos: [5.4, 3.0, 17.8],   look: [0.6, 5.2, 6.0],    fov: 45 },
+  // t=23 镜03→04：沿丹陛石阶加速仰升，白石望柱从侧前掠过，抵达一层廊前
+  { t: 23,  pos: [5.8, 9.2, 5.2],    look: [2.5, 13.8, -4.5],  fov: 44 },
+  // t=30 镜04→05：斜向滑升绕过南廊六角宫灯与斗拱，升至一层飞檐角
+  { t: 30,  pos: [12.5, 16.8, -1.8], look: [8.5, 16.4, -7.2],  fov: 44 },
+  // t=37 镜05→06：擦过碧瓦当与翘角脊兽，收进二层朱漆柱廊
+  { t: 37,  pos: [12.2, 20.8, -5.2], look: [4.0, 21.0, -7.8],  fov: 48 },
+  // t=45 镜06→07：二层朱漆廊柱间连续横移完毕，落位至人物(0,18.8,-5.6)肩后方
+  { t: 45,  pos: [-0.95, 20.65, -7.7], look: [0.0, 20.4, 22.0], fov: 46 },
+  // t=55 镜07→08：越肩推进把人物甩出画外，视野豁然开朗只剩飞檐与江山
+  { t: 55,  pos: [0.2, 21.6, 4.5],   look: [0.0, 19.5, 65.0],  fov: 50 },
+  // t=66 镜08→09：后拉大弧升，阁楼完整入画，进入高空航拍大环绕起点
+  { t: 66,  pos: [48.0, 38.0, 56.0], look: [0.0, 18.0, -16.0], fov: 50 },
+  // t=78 镜09→10：完成 >155° 航拍大环绕后位于西北高空，准备俯冲入阁
+  { t: 78,  pos: [-26.0, 39.0, 12.0], look: [0.0, 30.2, -14.0], fov: 48 },
+  // t=88 镜10→11：穿檐滑入顶层明间窗内(人物在 -1.85,27.6,-12.3)，窗框当画框
+  { t: 88,  pos: [1.4, 30.0, -16.8], look: [-0.8, 29.3, 18.0], fov: 46 },
+  // t=99 镜11→12：窗内缓推横移至窗框边缘，即将穿窗出檐
+  { t: 99,  pos: [-0.5, 30.2, -10.8], look: [-6.0, 28.5, 35.0], fov: 48 },
+  // t=109 镜12→13：穿窗出檐并回望阁身，云开日漏光斑扫楼
+  { t: 109, pos: [-38.0, 35.0, 26.0], look: [0.0, 22.0, -14.0], fov: 50 },
+  // t=120 镜13→14：全景横摇结束，顺势衔接领航孤鹜轨迹，切入长焦
+  { t: 120, pos: [-32.0, 31.0, 42.0], look: [-85.0, 34.0, 42.0], fov: 36 },
+  // t=130 镜14→15：长焦(FOV 20°)紧跟飞鸟掠过落霞，准备急拉天际
+  { t: 130, pos: [-20.0, 33.0, 48.0], look: [-38.0, 37.5, 29.0], fov: 20 },
+  // t=140 镜15→16：急速广角拉出到高远天际线，齐飞与秋水一色同框
+  { t: 140, pos: [65.0, 44.0, 122.0], look: [-18.0, 16.0, -25.0], fov: 54 },
+  // t=153 镜16→17：渔舟唱晚，极缓后拉微降，金转玫瑰紫
+  { t: 153, pos: [78.0, 36.0, 142.0], look: [-10.0, 14.0, -20.0], fov: 52 },
+  // t=166 镜17→18：暮色初蓝、华灯齐燃，低速横移
+  { t: 166, pos: [46.0, 31.0, 164.0], look: [0.0, 15.0, -16.0],   fov: 50 },
+  // t=179 镜18→19：水阔烟深，继续缓退拉远
+  { t: 179, pos: [-18.0, 29.0, 198.0], look: [0.0, 14.0, -16.0],  fov: 48 },
+  // t=193 镜19→20：孤洲寒雾，极远景把滕王阁拉成天地间一粒琥珀光点
+  { t: 193, pos: [-78.0, 32.0, 238.0], look: [-6.0, 12.0, -16.0], fov: 46 },
+  // t=206 镜20→21：星河初现，在浩渺江雾中极缓回推微仰
+  { t: 206, pos: [-48.0, 26.0, 145.0], look: [0.0, 18.0, -16.0],  fov: 46 },
+  // t=220 镜21→22：溯光归阁，柔缓弧升回到顶层高处露台外侧，人物背影入画
+  { t: 220, pos: [-5.5, 30.2, -12.6], look: [0.0, 29.3, -6.2],   fov: 44 },
+  // t=236 镜22→23：缓推贴近高台背影，剪影对着西天残霞与江水
+  { t: 236, pos: [-1.4, 29.65, -10.8], look: [-0.4, 29.1, 14.0], fov: 42 },
+  // t=253 镜23→24：低速侧弧轻移至露台东侧，开启最后大角度缓环绕
+  { t: 253, pos: [4.2, 30.1, -9.8],   look: [0.0, 29.2, -8.0],   fov: 44 },
+  // t=271 镜24→25：围绕高台完成 >135° 缓环绕，转向东南拉开
+  { t: 271, pos: [-22.0, 33.5, 16.0], look: [-4.0, 26.0, -12.0], fov: 48 },
+  // t=289 镜25→26：环绕加拉远并偏置构图，把楼推向画面左侧边缘
+  { t: 289, pos: [68.0, 34.0, 118.0], look: [48.0, 14.0, -24.0], fov: 52 },
+  // t=309 镜26→27：楼成左侧天际远点，九成画面归于夜空与江水
+  { t: 309, pos: [118.0, 25.0, 182.0], look: [92.0, 6.0, -18.0], fov: 54 },
+  // t=330 镜27止幅：留足21秒“空自流”，极缓江面漂移至全片终点（绝不静止）
+  { t: 330, pos: [132.0, 19.5, 206.0], look: [112.0, 3.2, -8.0], fov: 55 }
+];
+
+// 辅助：平滑样条节点插值（使用 Catmull-Rom 风格切线，保证速度连续无折角）
+function evalCatmullScalar(p0, p1, p2, p3, u) {
+  const u2 = u * u, u3 = u2 * u;
+  return 0.5 * (
+    (2 * p1) +
+    (-p0 + p2) * u +
+    (2 * p0 - 5 * p1 + 4 * p2 - p3) * u2 +
+    (-p0 + 3 * p1 - 3 * p2 + p3) * u3
+  );
+}
+
+function evalCatmullVec3(a0, a1, a2, a3, u, out) {
+  out.set(
+    evalCatmullScalar(a0[0], a1[0], a2[0], a3[0], u),
+    evalCatmullScalar(a0[1], a1[1], a2[1], a3[1], u),
+    evalCatmullScalar(a0[2], a1[2], a2[2], a3[2], u)
+  );
+  return out;
+}
+
+function updateCameraAndFx(tSec) {
+  const t = THREE.MathUtils.clamp(tSec, 0, TOTAL_DURATION);
+
+  // 查找当前所属分段 i (CAM_NODES[i].t <= t <= CAM_NODES[i+1].t)
+  let i = 0;
+  while (i < CAM_NODES.length - 2 && t >= CAM_NODES[i + 1].t) i++;
+  const n0 = CAM_NODES[Math.max(0, i - 1)];
+  const n1 = CAM_NODES[i];
+  const n2 = CAM_NODES[i + 1];
+  const n3 = CAM_NODES[Math.min(CAM_NODES.length - 1, i + 2)];
+
+  let u = THREE.MathUtils.clamp((t - n1.t) / Math.max(1e-5, n2.t - n1.t), 0, 1);
+
+  // 第一幕入景（镜01-03）：抬升带明显加速度（非线性时间映射，非匀速平移）
+  if (i === 0) {
+    u = Math.pow(u, 1.55); // 贴水由极慢渐加速
+  } else if (i === 1) {
+    u = Math.pow(u, 1.38); // 离水抬升继续带加速度
+  } else if (i === 2) {
+    u = Math.pow(u, 1.25); // 拾级而上带仰升加速度
+  } else if (i === 14) {
+    // 镜15：急速拉出到天际线（前快后舒展）
+    u = 1 - Math.pow(1 - u, 2.35);
+  }
+
+  // 基础平滑样条位置与朝向
+  evalCatmullVec3(n0.pos, n1.pos, n2.pos, n3.pos, u, _v1);
+  evalCatmullVec3(n0.look, n1.look, n2.look, n3.look, u, _v2);
+  let fov = THREE.MathUtils.lerp(n1.fov, n2.fov, smoothstep(u));
+
+  // === 镜头专属连续细节修饰（使用 sin(pi*u) 窗函数，端点严格为 0，绝不破坏连续性） ===
+  const win = Math.sin(Math.PI * u);
+
+  // 镜01 (0-8s)：严格贴水只看倒影，压低视线避免楼体提前入画
+  if (i === 0) {
+    _v1.y = Math.min(_v1.y, 0.58 + u * 0.55);
+    _v2.y = THREE.MathUtils.lerp(-11.2, -1.8, Math.pow(u, 1.8));
+  }
+
+  // 镜04 (23-30s)：绕宫灯微弧
+  if (i === 3) {
+    _v1.x += win * 2.2;
+    _v1.z += win * 2.4;
+  }
+
+  // 镜06 (37-45s)：朱漆廊柱间横移（特意贴近 z=-6.3 穿行于柱列外侧，柱子从镜头前依次掠过）
+  if (i === 5) {
+    const rawU = THREE.MathUtils.clamp((t - n1.t) / (n2.t - n1.t), 0, 1);
+    _v1.set(
+      THREE.MathUtils.lerp(12.2, -0.95, smoothstep(rawU)),
+      THREE.MathUtils.lerp(20.8, 20.65, rawU) + Math.sin(rawU * Math.PI) * 0.35,
+      THREE.MathUtils.lerp(-5.2, -7.7, rawU) + Math.sin(rawU * Math.PI) * 2.1
+    );
+    _v2.set(
+      THREE.MathUtils.lerp(4.0, 0.0, rawU),
+      20.6,
+      THREE.MathUtils.lerp(-7.8, 22.0, smoothstep(rawU))
+    );
+  }
+
+  // 镜07 (45-55s)：越肩把人物甩出画（先贴在人物左肩后，推进越过 z=-5.6，将人甩到镜头背后）
+  if (i === 6) {
+    const rawU = THREE.MathUtils.clamp((t - n1.t) / (n2.t - n1.t), 0, 1);
+    const s = smoothstep(rawU);
+    _v1.set(
+      THREE.MathUtils.lerp(-0.95, 0.2, s) - Math.sin(rawU * Math.PI) * 0.35,
+      THREE.MathUtils.lerp(20.65, 21.6, s),
+      THREE.MathUtils.lerp(-7.7, 4.5, Math.pow(rawU, 1.15))
+    );
+    _v2.set(
+      THREE.MathUtils.lerp(0.0, 0.0, s),
+      THREE.MathUtils.lerp(20.4, 19.5, s),
+      THREE.MathUtils.lerp(22.0, 65.0, s)
+    );
+  }
+
+  // 镜09 (66-78s)：大航拍环绕 >160°（沿半径 76m 弧线绕楼旋转，端点与 n1/n2 精确闭合）
+  if (i === 8) {
+    const rawU = THREE.MathUtils.clamp((t - n1.t) / (n2.t - n1.t), 0, 1);
+    const s = smoothstep(rawU);
+    const angStart = Math.atan2(n1.pos[0], n1.pos[2] + 16); // ~0.58 rad
+    const angEnd = angStart + 2.88; // 旋转 ~165°（满足 >120° 硬指标）
+    const rStart = Math.hypot(n1.pos[0], n1.pos[2] + 16);
+    const rEnd = Math.hypot(n2.pos[0], n2.pos[2] + 16);
+    const ang = THREE.MathUtils.lerp(angStart, angEnd, s);
+    // 末端平滑拉回 n2 实际方位角，保持 165° 大弧同时无缝落位 n2
+    const targetAng = Math.atan2(n2.pos[0], n2.pos[2] + 16) + Math.PI * 2;
+    const blendedAng = THREE.MathUtils.lerp(angStart, targetAng, s);
+    const rad = THREE.MathUtils.lerp(rStart, rEnd, s) + Math.sin(s * Math.PI) * 26.0;
+    _v1.set(
+      Math.sin(blendedAng) * rad,
+      THREE.MathUtils.lerp(n1.pos[1], n2.pos[1], s) + Math.sin(s * Math.PI) * 18.0,
+      -16 + Math.cos(blendedAng) * rad
+    );
+    _v2.set(0, THREE.MathUtils.lerp(18.0, 30.2, s * s), -16);
+  }
+
+  // 镜11 (88-99s)：顶层窗内往外看（严格保持在顶层明间内部，窗框清晰框住江景）
+  if (i === 10) {
+    const rawU = THREE.MathUtils.clamp((t - n1.t) / (n2.t - n1.t), 0, 1);
+    const s = smoothstep(rawU);
+    _v1.set(
+      THREE.MathUtils.lerp(1.4, -0.5, s),
+      THREE.MathUtils.lerp(30.0, 30.2, s),
+      THREE.MathUtils.lerp(-16.8, -10.8, s)
+    );
+    _v2.set(
+      THREE.MathUtils.lerp(-0.8, -6.0, s),
+      THREE.MathUtils.lerp(29.3, 28.5, s),
+      THREE.MathUtils.lerp(18.0, 35.0, s)
+    );
+  }
+
+  // 镜14 (120-130s)：长焦真实锁定跟拍领航孤鹜
+  if (i === 13) {
+    const rawU = THREE.MathUtils.clamp((t - n1.t) / (n2.t - n1.t), 0, 1);
+    getLeadBirdPos(t, _birdTmp);
+    // 权重在镜中达 1.0，两端平滑融入前后镜朝向
+    const lockW = smoothstep(Math.min(1, rawU * 4.5)) * smoothstep(Math.min(1, (1 - rawU) * 5.0));
+    _v2.lerp(_birdTmp, lockW);
+    fov = THREE.MathUtils.lerp(36, 20, smoothstep(rawU));
+  }
+
+  // 镜15 (130-140s)：前段仍带一点跟鸟惯性，随即急速广角拉向天际线
+  if (i === 14) {
+    const rawU = THREE.MathUtils.clamp((t - n1.t) / (n2.t - n1.t), 0, 1);
+    getLeadBirdPos(t, _birdTmp);
+    const tailLock = Math.max(0, 1 - rawU * 3.0);
+    _v2.lerp(_birdTmp, tailLock * tailLock);
+    fov = THREE.MathUtils.lerp(20, 54, 1 - Math.pow(1 - rawU, 2.2));
+  }
+
+  // 镜24 (253-271s)：高处露台大角度缓环绕（>145°），柱子与飞檐掠过前景
+  if (i === 23) {
+    const rawU = THREE.MathUtils.clamp((t - n1.t) / (n2.t - n1.t), 0, 1);
+    const s = smoothstep(rawU);
+    const cx = 0.0, cz = -8.0; // 以露台人物与高阁为中心
+    const a1 = Math.atan2(n1.pos[0] - cx, n1.pos[2] - cz);
+    let a2 = Math.atan2(n2.pos[0] - cx, n2.pos[2] - cz);
+    // 确保逆时针/顺时针跨越约 150°+
+    while (a2 - a1 < 2.45) a2 += Math.PI * 2;
+    if (a2 - a1 > 3.6) a2 = a1 + 2.65;
+    const r1 = Math.hypot(n1.pos[0] - cx, n1.pos[2] - cz);
+    const r2 = Math.hypot(n2.pos[0] - cx, n2.pos[2] - cz);
+    // 末端精确对齐 n2
+    const ang = THREE.MathUtils.lerp(a1, Math.atan2(n2.pos[0] - cx, n2.pos[2] - cz) - Math.PI * 2, s);
+    // 选弧长 ~2.6 rad (~149°)
+    const arcAng = a1 - s * 2.58;
+    const endFix = smoothstep(Math.max(0, (s - 0.82) / 0.18));
+    const rad = THREE.MathUtils.lerp(r1, r2, s) + Math.sin(s * Math.PI) * 5.2;
+    const rx = cx + Math.sin(arcAng) * rad;
+    const rz = cz + Math.cos(arcAng) * rad;
+    const ry = THREE.MathUtils.lerp(n1.pos[1], n2.pos[1], s) + Math.sin(s * Math.PI) * 1.4;
+    _v1.set(
+      THREE.MathUtils.lerp(rx, n2.pos[0], endFix),
+      THREE.MathUtils.lerp(ry, n2.pos[1], endFix),
+      THREE.MathUtils.lerp(rz, n2.pos[2], endFix)
+    );
+    _v2.set(
+      THREE.MathUtils.lerp(0.0, -4.0, s),
+      THREE.MathUtils.lerp(29.2, 26.0, s),
+      THREE.MathUtils.lerp(-8.0, -12.0, s)
+    );
+  }
+
+  // 镜27 (309-330s)：保留极轻柔的江风呼吸感微漂，杜绝完全静止
+  if (i === 26) {
+    const rawU = THREE.MathUtils.clamp((t - n1.t) / (n2.t - n1.t), 0, 1);
+    _v1.y += Math.sin(rawU * Math.PI * 2) * 0.35;
+    _v2.x += Math.sin(rawU * Math.PI) * 3.5;
+  }
+
+  camera.position.copy(_v1);
+  camera.fov = fov;
+  camera.updateProjectionMatrix();
+  camera.lookAt(_v2);
+
+  // 云开光斑（镜12-13：99s–120s 期间在楼身上自西向东缓缓扫过）
+  const spotWindow = smoothstep(THREE.MathUtils.clamp((t - 97) / 4, 0, 1)) *
+                     (1 - smoothstep(THREE.MathUtils.clamp((t - 118) / 4, 0, 1)));
+  skyUniforms.uCloudOpen.value = spotWindow;
+  sunSpot.intensity = spotWindow * 18.0;
+  const spotProg = THREE.MathUtils.clamp((t - 99) / 21, 0, 1);
+  sunSpotTarget.position.set(
+    THREE.MathUtils.lerp(-18, 22, spotProg),
+    THREE.MathUtils.lerp(16, 30, Math.sin(spotProg * Math.PI)),
+    -14
+  );
+  sunSpotTarget.updateMatrixWorld();
+}
+
+// ==================== 11. 网页交互与播放状态管理 ====================
+const state = {
+  time: 0,
+  playing: true,
+  loopSingle: false,
+  currentShotIdx: 0,
+  menuOpen: true
+};
+
+// DOM 元素
+const elShotId = document.getElementById('hud-shot-id');
+const elClock = document.getElementById('hud-clock');
+const elTitle = document.getElementById('hud-title');
+const elShotTime = document.getElementById('hud-shot-time');
+const elTotalTime = document.getElementById('hud-total-time');
+const elFps = document.getElementById('hud-fps');
+const elMiniFill = document.getElementById('hud-mini-fill');
+const elDrawer = document.getElementById('shot-drawer');
+const elShotList = document.getElementById('shot-list');
+const elMenuToggle = document.getElementById('menu-toggle');
+const elMenuToggleLabel = document.getElementById('menu-toggle-label');
+const elBtnSeq = document.getElementById('btn-seq');
+const elBtnPlay = document.getElementById('btn-play');
+const elBtnPrev = document.getElementById('btn-prev');
+const elBtnNext = document.getElementById('btn-next');
+const elBtnLoop = document.getElementById('btn-loop');
+const elScrubber = document.getElementById('scrubber');
+const elLoading = document.getElementById('loading-mask');
+
+function fmtTime(sec) {
+  const s = Math.max(0, Math.floor(sec));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${String(m).padStart(2, '0')}:${String(r).padStart(2, '0')}`;
+}
+
+function fmtStoryClock(tSec) {
+  // 0s -> 15:30 (930min), 330s -> 21:00 (1260min)
+  const mins = Math.floor(930 + (tSec / TOTAL_DURATION) * 330);
+  const hh = Math.floor(mins / 60);
+  const mm = mins % 60;
+  let shichen = '申时';
+  if (hh >= 17 && hh < 19) shichen = '酉时';
+  else if (hh >= 19) shichen = '戌时';
+  return `${shichen} · ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+}
+
+function findShotIndex(tSec) {
+  for (let i = SHOTS.length - 1; i >= 0; i--) {
+    if (tSec >= SHOTS[i].start - 1e-4) return i;
+  }
+  return 0;
+}
+
+// 渲染 27 镜分镜表
+const shotButtons = [];
+function buildShotMenu() {
+  let lastAct = '';
+  SHOTS.forEach((s, idx) => {
+    if (s.act !== lastAct) {
+      lastAct = s.act;
+      const div = document.createElement('div');
+      div.className = 'act-divider';
+      div.textContent = s.act;
+      elShotList.appendChild(div);
+    }
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'shot-item';
+    btn.dataset.index = String(idx);
+    btn.innerHTML = `
+      <div class="shot-row1">
+        <span class="shot-num">${String(s.id).padStart(2, '0')}</span>
+        <span class="shot-name">${s.title}</span>
+        <span class="shot-time">${fmtTime(s.start)}-${fmtTime(s.start + s.dur)} (${s.dur}s)</span>
+      </div>
+      <div class="shot-row2">
+        <span>${s.scale} · ${s.move}</span>
+        ${s.person ? '<span class="shot-tag">人物</span>' : ''}
+      </div>
+    `;
+    btn.addEventListener('click', () => jumpToShot(idx, true));
+    elShotList.appendChild(btn);
+    shotButtons.push(btn);
+  });
+}
+buildShotMenu();
+
+function syncControlUI() {
+  elBtnPlay.textContent = state.playing ? '暂停' : '继续';
+  elBtnLoop.textContent = state.loopSingle ? '单镜循环: 开' : '单镜循环: 关';
+  elBtnLoop.classList.toggle('active-toggle', state.loopSingle);
+  elDrawer.classList.toggle('collapsed', !state.menuOpen);
+  elMenuToggleLabel.textContent = state.menuOpen ? '收起分镜' : '展开分镜 (27)';
+}
+
+function highlightShot(idx) {
+  state.currentShotIdx = idx;
+  shotButtons.forEach((b, i) => b.classList.toggle('active', i === idx));
+  const activeBtn = shotButtons[idx];
+  if (activeBtn && state.menuOpen) {
+    activeBtn.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+}
+
+function jumpToShot(idx, autoPlay = true) {
+  const clamped = THREE.MathUtils.clamp(idx, 0, SHOTS.length - 1);
+  state.time = SHOTS[clamped].start;
+  if (autoPlay) state.playing = true;
+  highlightShot(clamped);
+  syncControlUI();
+  applySceneAtTime(state.time, 0);
+}
+
+// 按钮交互绑定
+elMenuToggle.addEventListener('click', () => {
+  state.menuOpen = !state.menuOpen;
+  syncControlUI();
+});
+
+// 按顺序播放：关闭单镜循环，从第1镜 00:00 连续播放到全片结束
+elBtnSeq.addEventListener('click', () => {
+  state.loopSingle = false;
+  state.time = 0;
+  state.playing = true;
+  highlightShot(0);
+  syncControlUI();
+  applySceneAtTime(state.time, 0);
+});
+
+elBtnPlay.addEventListener('click', () => {
+  if (!state.playing && state.time >= TOTAL_DURATION - 0.05) {
+    state.time = 0;
+  }
+  state.playing = !state.playing;
+  syncControlUI();
+});
+
+elBtnPrev.addEventListener('click', () => {
+  const cur = findShotIndex(state.time);
+  const s = SHOTS[cur];
+  // 若在镜内已过 1.5s，先回到本镜开头，否则切上一镜
+  if (state.time - s.start > 1.5 && !state.loopSingle) {
+    jumpToShot(cur, state.playing);
+  } else {
+    jumpToShot(Math.max(0, cur - 1), state.playing);
+  }
+});
+
+elBtnNext.addEventListener('click', () => {
+  const cur = findShotIndex(state.time);
+  jumpToShot(Math.min(SHOTS.length - 1, cur + 1), state.playing);
+});
+
+elBtnLoop.addEventListener('click', () => {
+  state.loopSingle = !state.loopSingle;
+  syncControlUI();
+});
+
+let scrubbing = false;
+elScrubber.addEventListener('input', () => {
+  scrubbing = true;
+  state.time = parseFloat(elScrubber.value);
+  const idx = findShotIndex(state.time);
+  if (idx !== state.currentShotIdx) highlightShot(idx);
+  applySceneAtTime(state.time, 0);
+});
+elScrubber.addEventListener('change', () => { scrubbing = false; });
+
+// 键盘操作（Space 播放/暂停，左右方向键切镜，L 单镜循环，M 展开/收起菜单）
+window.addEventListener('keydown', (e) => {
+  if (e.target && (e.target.tagName === 'INPUT' && e.code !== 'Space')) return;
+  if (e.code === 'Space') {
+    e.preventDefault();
+    elBtnPlay.click();
+  } else if (e.code === 'ArrowLeft') {
+    e.preventDefault();
+    const cur = findShotIndex(state.time);
+    jumpToShot(Math.max(0, cur - 1), state.playing);
+  } else if (e.code === 'ArrowRight') {
+    e.preventDefault();
+    const cur = findShotIndex(state.time);
+    jumpToShot(Math.min(SHOTS.length - 1, cur + 1), state.playing);
+  } else if (e.key === 'l' || e.key === 'L') {
+    elBtnLoop.click();
+  } else if (e.key === 'm' || e.key === 'M') {
+    elMenuToggle.click();
+  }
+});
+
+// ==================== 12. 场景状态统一更新与渲染主循环 ====================
+function applySceneAtTime(tSec, realElapsed) {
+  sampleEnvironment(tSec);
+
+  // 更新天空着色器
+  skyUniforms.uZenith.value.copy(envState.zenith);
+  skyUniforms.uMid.value.copy(envState.mid);
+  skyUniforms.uHorizon.value.copy(envState.horizon);
+  skyUniforms.uSunDir.value.copy(envState.sunDir);
+  skyUniforms.uSunCol.value.copy(envState.sunCol);
+  skyUniforms.uCloudCol.value.copy(envState.cloudCol);
+  skyUniforms.uCloudGlow.value.copy(envState.cloudGlow);
+  skyUniforms.uStars.value = envState.stars;
+  skyUniforms.uTime.value = tSec * 0.6 + realElapsed * 0.15;
+
+  // 更新平行光、环境光、距离雾、曝光
+  sunLight.position.copy(envState.sunDir).multiplyScalar(180);
+  sunLight.color.copy(envState.sunCol);
+  sunLight.intensity = envState.sunInt;
+  hemiLight.color.copy(envState.ambCol);
+  hemiLight.intensity = envState.ambInt;
+  fog.color.copy(envState.fogCol);
+  fog.density = envState.fogDen;
+  renderer.toneMappingExposure = envState.exp;
+
+  // 更新灯笼、暖窗与建筑点光源（随暮色自然渐亮）
+  matLanternGlow.emissiveIntensity = envState.lantern * 2.2;
+  matWindowGlow.emissiveIntensity = envState.lantern * 1.45;
+  for (let i = 0; i < pavilionLights.length; i++) {
+    pavilionLights[i].intensity = envState.lantern * (i === 1 ? 38 : 24);
+  }
+
+  // 更新水面着色器参数
+  waterUniforms.uTime.value = tSec * 0.85 + realElapsed * 0.4;
+  waterUniforms.uSunDir.value.copy(envState.sunDir);
+  waterUniforms.uSunCol.value.copy(envState.sunCol);
+  waterUniforms.uWaterTint.value.copy(envState.waterTint);
+  waterUniforms.uFogCol.value.copy(envState.fogCol);
+  waterUniforms.uFogDen.value = envState.fogDen;
+
+  // 更新渔舟缓缓航行与水波起伏
+  for (const b of boats) {
+    b.group.position.set(
+      b.cfg.x + b.cfg.vx * tSec,
+      0.08 + Math.sin(tSec * 1.2 + b.cfg.x) * 0.08,
+      b.cfg.z + b.cfg.vz * tSec
+    );
+    b.group.rotation.z = Math.sin(tSec * 0.9 + b.cfg.z) * 0.03;
+  }
+
+  // 更新飞鸟、人物、相机
+  updateBirds(tSec);
+  updatePersonForTime(tSec);
+  updateCameraAndFx(tSec);
+
+  // 更新 HUD
+  const idx = findShotIndex(tSec);
+  if (idx !== state.currentShotIdx) highlightShot(idx);
+  const s = SHOTS[idx];
+  const inShot = THREE.MathUtils.clamp(tSec - s.start, 0, s.dur);
+  elShotId.textContent = `镜 ${String(s.id).padStart(2, '0')} / ${SHOTS.length}`;
+  elClock.textContent = fmtStoryClock(tSec);
+  elTitle.textContent = s.title;
+  elShotTime.textContent = `${fmtTime(inShot)} / ${fmtTime(s.dur)}`;
+  elTotalTime.textContent = `${fmtTime(tSec)} / ${fmtTime(COMPUTED_TOTAL)}`;
+  elMiniFill.style.width = `${(tSec / TOTAL_DURATION) * 100}%`;
+  if (!scrubbing) elScrubber.value = tSec.toFixed(2);
+}
+
+// 窗口尺寸自适应
+window.addEventListener('resize', () => {
+  const w = window.innerWidth, h = window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+});
+
+// 暴露只读调试句柄，便于验证（不影响画面）
+window.__TENGWANGGE__ = {
+  shots: SHOTS,
+  totalDuration: COMPUTED_TOTAL,
+  getState: () => ({ ...state, cameraPos: camera.position.toArray(), fov: camera.fov }),
+  jumpToTime: (t) => { state.time = THREE.MathUtils.clamp(t, 0, TOTAL_DURATION); applySceneAtTime(state.time, 0); },
+  jumpToShot: (idx) => jumpToShot(idx, false)
+};
+
+// 初始化首帧并隐藏加载层
+syncControlUI();
+highlightShot(0);
+applySceneAtTime(0, 0);
+requestAnimationFrame(() => elLoading.classList.add('hidden'));
+
+// 渲染循环（实时计算平面水面反射 + 统计 FPS）
+let lastNow = performance.now();
+let realElapsed = 0;
+let fpsFrames = 0, fpsAcc = 0;
+
+function animate(now) {
+  requestAnimationFrame(animate);
+  const dt = Math.min((now - lastNow) * 0.001, 0.1);
+  lastNow = now;
+  realElapsed += dt;
+
+  fpsFrames++;
+  fpsAcc += dt;
+  if (fpsAcc >= 0.5) {
+    elFps.textContent = `${Math.round(fpsFrames / fpsAcc)} FPS`;
+    fpsFrames = 0;
+    fpsAcc = 0;
+  }
+
+  if (state.playing && !scrubbing) {
+    state.time += dt;
+    if (state.loopSingle) {
+      const s = SHOTS[state.currentShotIdx];
+      if (state.time >= s.start + s.dur) {
+        state.time = s.start;
+      }
+    } else if (state.time >= TOTAL_DURATION) {
+      state.time = TOTAL_DURATION;
+      state.playing = false;
+      syncControlUI();
+    }
+  }
+
+  applySceneAtTime(state.time, realElapsed);
+  updateWaterReflection();
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(animate);
+
+</script>
+</body>
+</html>
